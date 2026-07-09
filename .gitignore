@@ -1,0 +1,16 @@
+# Real MCP config — contains this machine's absolute path and API credentials.
+# Copy .mcp.json.example to .mcp.json and fill in your own values.
+.mcp.json
+
+# Dependencies
+etsy-mcp-server/node_modules/
+
+# Build output — regenerate with `npm run build`
+etsy-mcp-server/build/
+
+# Local-only tool settings
+.claude/settings.local.json
+
+# OS junk
+.DS_Store
+Thumbs.db

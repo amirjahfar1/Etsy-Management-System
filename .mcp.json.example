@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "etsy": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "etsy-mcp-server/build/index.js"
+      ],
+      "env": {
+        "ETSY_API_KEY": "your_etsy_api_key_here",
+        "ETSY_SHARED_SECRET": "your_etsy_shared_secret_here"
+      }
+    },
+    "etsy-docs": {
+      "type": "http",
+      "url": "https://mcp.api.etsycloud.com/mcp"
+    }
+  }
+}

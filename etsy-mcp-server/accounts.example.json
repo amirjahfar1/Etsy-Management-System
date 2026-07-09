@@ -1,0 +1,11 @@
+{
+  "default_account": "your-shop-account-name",
+  "accounts": {
+    "your-shop-account-name": {
+      "shop_id": "00000000",
+      "shop_name": "YOUR_SHOP_NAME",
+      "access_token": "generated-by-oauth-setup.js",
+      "refresh_token": "generated-by-oauth-setup.js"
+    }
+  }
+}
