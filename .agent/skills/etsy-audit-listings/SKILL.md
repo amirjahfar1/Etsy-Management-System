@@ -9,7 +9,7 @@ This is the catalog-wide triage pass: it looks at every active listing, flags th
 
 Every tool accepts an optional `account` argument. If the user names a specific shop, pass it through; otherwise the default account is used.
 
-Read `../_shared/etsy-seo-standards.md` if unsure of a field limit or blind spot — it's shared across all four audit/optimize skills so the rules stay consistent.
+Read `../_shared/etsy-seo-standards.md` if unsure of a field limit or blind spot — it's shared across all five audit/optimize/QA skills (including etsy-listing-qa-check) so the rules stay consistent.
 
 ## Why bulk-first
 
@@ -29,7 +29,7 @@ Owners tend to optimize the listing they happened to click on, which is rarely t
 
 - **Sellability first** — `state` and `quantity`. A listing that's inactive or out of stock isn't a "needs better tags" problem, it's a "can't be bought" problem — flag it separately and with higher urgency than SEO issues.
 - **Title** — length (Etsy allows up to 140 chars; very short titles waste SEO real estate), and keyword stuffing / repetition that reads as spam rather than natural front-loaded keywords.
-- **Tags** — whether all **13 tag slots** are used, and whether any used tag exceeds **20 characters** (Etsy will reject it). Unused tag slots are the single most common free SEO win. Flag any listing under 13.
+- **Tags** — whether all **13 tag slots** are used, and whether any used tag exceeds **20 characters** (Etsy will reject it) or contains an **uppercase character** (shop style rule, not an API rejection, but flag it). Unused tag slots are the single most common free SEO win. Flag any listing under 13.
 - **Attributes** — missing or thin attributes (via `get_listing_properties`), including `materials`/`who_made`/`when_made`; incomplete attributes hurt filtered-search visibility.
 - **Variations, personalization & category fit** — flag listings missing variants/personalization that are common for their product type, and any that look miscategorized (`taxonomy_id` mismatched to the actual product — check `etsy-docs` if unsure).
 - **Renewal leak** — listings with `should_auto_renew` on that otherwise look stale/neglected are a quiet recurring fee cost with no offsetting benefit; flag as a cheap, concrete fix (turn it off, or actually fix the listing).
@@ -87,5 +87,6 @@ _<N> active listings scanned · shop avg landed price <X> · attributes checked 
 This skill stops at diagnosis. Point the user to:
 - **etsy-audit-listing** — deep-dive one flagged listing before touching it.
 - **etsy-optimize-listing** — actually draft the rewrite/fix for a specific listing.
+- **etsy-listing-qa-check** — if what the user actually wants is a faster, purely mechanical rules pass/fail across the whole catalog (no severity judgment, no shop-wide-pattern narrative, just "which listings violate which field/style rule") rather than this skill's fuller structural/SEO/pricing triage. Point to this instead of (or after) this skill when the ask is narrowly "are my tags/titles rule-compliant," not "what's wrong with my catalog."
 
 Suggest they start with the High-severity items and run one of those per listing.

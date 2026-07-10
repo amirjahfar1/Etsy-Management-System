@@ -3,7 +3,9 @@ name: etsy-product-ideation
 description: >-
   Generates concrete new product concepts for the user's Etsy shop by crossing
   current market trends, competitor bestsellers, and — crucially — the user's OWN
-  proven sellers, then offers to spin a chosen concept into a draft listing. Trigger
+  proven sellers, then hands the chosen concept off to etsy-new-listing-copywriter
+  for the actual research-first, QA-gated title/tags/description draft (this skill
+  never drafts final copy or calls create_draft_listing itself). Trigger
   whenever the user says anything like "what new products should I add", "give me new
   listing ideas", "help me brainstorm new products for my shop", "what should I make
   next", "I need fresh listings", "what would sell for me", or asks for product
@@ -18,11 +20,11 @@ The difference between a growth-agency idea and a lazy one: lazy ideas copy what
 
 ## Safety gate — read before any draft
 
-This skill's research steps are all read-only. But it ends by offering to create a **draft listing**, and `create_draft_listing` is a **write** to a live Etsy shop. A draft is unpublished, but it is still a real mutation.
+This skill's research steps are all read-only, and **this skill itself never calls `create_draft_listing`.** Its deliverable is concepts — a working title direction, a price band, and a rationale — not launch-ready copy. Turning a chosen concept into an actual title, full 13-tag set, and description is **`etsy-new-listing-copywriter`'s job**: it runs its own research-first pass (reads what's actually ranking for the concept's keyword, benchmarks the shop's own winners if it extends a line) and enforces the mandatory Copy QA Gate (no em dashes, no AI-tell phrasing, lowercase tags, field limits) before anything is shown or written. Drafting final copy here would skip that gate entirely, so don't do it — hand the chosen concept off instead (see "Next step" below).
 
-**Never call `create_draft_listing` off this skill without an explicit confirmation.** Show the user exactly what the draft will contain — title, tags, price, description shell — and wait for a clear "yes / haan / confirm" before calling it. One concept at a time, only the one the user picks.
+Once the user is in `etsy-new-listing-copywriter`'s flow, that skill's own confirm-before-write discipline applies: nothing is created without an explicit "yes / haan / confirm" against the exact payload, one concept at a time.
 
-Also flag, every time you offer a draft: **image, file, and video upload aren't wired up in this system yet.** So a draft stops at a text concept + listing shell. The user will have to add photos manually in Etsy before it can be published. Set that expectation up front so nobody thinks they're getting a finished listing.
+Also flag, whenever a concept is presented: photos still need to be added before a new listing can be published (`upload_listing_image`/`upload_listing_video` exist for that, once files are ready and confirmed — but this skill doesn't judge photo quality or generate images). Set that expectation up front so nobody thinks a concept is a finished listing.
 
 ## Workflow — the three inputs
 
@@ -39,8 +41,8 @@ If you need exact field names for any endpoint, look them up via the **etsy-docs
 Cross the three inputs into **five concrete product concepts**. Each concept must tie back to a specific signal: a trend, a competitor gap, or an extension of one of the user's own bestsellers. Spread the five across those sources — don't let all five be "trend-chasing" or all five be "line extensions."
 
 Each concept gets:
-- **Working title** — the kind of title that would actually go on the listing (SEO-aware, not a codename).
-- **Suggested tag set** — 13 tags (Etsy's max), the mix you'd genuinely put on the listing.
+- **Working title direction** — the shape and keyword angle a real title would take (SEO-aware, not a codename) — a direction to hand to `etsy-new-listing-copywriter`, not a finished, QA-gated title.
+- **Positioning keywords** — 3-5 phrases the research surfaced for this concept (not a finished 13-tag set — that's `etsy-new-listing-copywriter`'s output, after its own deeper research and QA pass).
 - **Suggested price band** — a range, benchmarked against what the niche research showed comparable listings charge.
 - **Rationale** — one line linking it explicitly to a trend, a competitor gap, or the user's own bestseller line.
 
@@ -54,15 +56,15 @@ A 2-3 line recap: what's trending, what competitor listings looked strongest (pr
 ### The 5 concepts
 For each, in a clean block:
 
-> **1. [Working Title]**
-> - **Tags (13):** tag1, tag2, … tag13
+> **1. [Working title direction]**
+> - **Positioning keywords:** kw1, kw2, kw3 (3-5, not a finished tag set)
 > - **Price band:** $X-$Y
 > - **Rationale:** one line tying it to a trend / competitor gap / your own bestseller.
 
 Repeat for concepts 2-5.
 
 ### Next step
-Close with an explicit offer: *"Pick one and I'll turn it into a draft listing (`create_draft_listing`) once you confirm the details."* Restate the two caveats in one line: (1) the draft is unpublished and you'll confirm the exact title/tags/price/description before creating it, and (2) image upload isn't available in this system yet, so photos must be added manually in Etsy before publishing.
+Close with an explicit offer: *"Pick one and I'll hand it to `etsy-new-listing-copywriter` to do the real research-first title/13-tag/description draft (with its Copy QA Gate) — nothing gets created until you confirm that skill's exact payload."* Restate the two caveats in one line: (1) this skill's concepts are directional, not launch-ready copy — the copywriter skill does its own deeper research before drafting anything final, and (2) photos still need to be added (`upload_listing_image`/`upload_listing_video`, once files are ready) before a new listing can be published.
 
 ## Tone
 

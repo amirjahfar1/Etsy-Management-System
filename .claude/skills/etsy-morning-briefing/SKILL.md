@@ -23,7 +23,7 @@ Work through these in order. Batch reads where possible — the API budget is 5 
 
 1. **New orders since last check.** Call `get_shop_receipts` filtered to recent activity (unshipped and/or created in the lookback window — default to the last 24 hours, or since the last briefing if the user indicates one). This is the spine of the briefing.
 
-2. **Overdue-to-ship computation.** For the open/unshipped orders, determine each order's ship-by deadline. Pull the shop's processing times via `get_processing_profiles` (and `get_shop_receipt` for per-order detail where needed) and compare each order's creation date + processing window against today (2026-07-04 unless the environment says otherwise). Bucket each open order as **overdue** (past deadline), **due soon** (within ~1 day of deadline), or on-track. This is the most important output — compute it carefully.
+2. **Overdue-to-ship computation.** For the open/unshipped orders, determine each order's ship-by deadline. Pull the shop's processing times via `get_processing_profiles` (and `get_shop_receipt` for per-order detail where needed) and compare each order's creation date + processing window against **today's actual current date** (read from your own current context, never a hardcoded date — this file is not updated daily, so a fixed date here would silently drift wrong). Bucket each open order as **overdue** (past deadline), **due soon** (within ~1 day of deadline), or on-track. This is the most important output — compute it carefully.
 
 3. **New reviews.** Call `get_shop_reviews` and pick out reviews newer than the last briefing. Flag anything **≤ 3 stars** as urgent — a negative review left unaddressed is both a ratings hit and a customer-service opportunity slipping away.
 

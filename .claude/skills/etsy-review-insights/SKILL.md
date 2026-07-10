@@ -55,4 +55,4 @@ A prioritized, concrete action list. Each item: the problem, the listing(s) affe
 
 ## Handoff
 
-The fix list is a diagnosis, not the surgery. After presenting it, offer to hand each item to the remediation skills: **etsy-audit-listing** to run a full audit on an affected listing, or **etsy-optimize-listing** to rewrite the copy/tags/attributes. Do not start editing listings from inside this skill — surface the findings, then let the user choose what to fix.
+The fix list is a diagnosis, not the surgery. After presenting it, offer to hand each item to the remediation skills: **etsy-audit-listing** to run a full audit on an affected listing, or **etsy-optimize-listing** to rewrite the copy/tags/attributes to fix the underlying product issue. If any theme (positive or negative) has reviews worth actually replying to — a sharp complaint that needs a public response, or a glowing review worth a thank-you — offer **etsy-review-responder** to draft that reply text. Do not start editing listings or drafting replies from inside this skill — surface the findings, then let the user choose what to fix or respond to.

@@ -66,15 +66,27 @@ it's marginal.
 For each qualifying listing, propose concrete seasonal phrasing to add — e.g.
 insert "valentines day gift" or "gift for her" into an available tag slot, and
 optionally weave a seasonal phrase into the title. Respect Etsy limits: **max 13
-tags, each ≤ 20 characters.** If all 13 tag slots are full, name which weakest
-tag the seasonal term temporarily displaces — and record that displaced tag so
-the revert can restore it exactly.
+tags, each ≤ 20 characters, all lowercase** (see `../_shared/etsy-seo-standards.md`
+— lowercase is the shop's own style rule, not an API rejection, but every
+inserted tag must still follow it). If all 13 tag slots are full, name which
+weakest tag the seasonal term temporarily displaces — and record that displaced
+tag so the revert can restore it exactly.
 
 ### 4. Build the revert plan
 
 For every insertion, record the pre-change state so the revert is a clean
 restore: the original tag (or empty slot) and original title. The revert plan is
 a first-class deliverable, not an afterthought.
+
+### 5. Run the Copy QA Gate on every proposed title insertion
+
+Tag insertions are short keywords and rarely trigger the reading-level/em-dash
+checks, but any listing where a seasonal phrase gets woven into the **title**
+must pass the full checklist in `../_shared/etsy-seo-standards.md` (no em
+dashes, grade 5-7 phrasing, no AI-tell filler, field limits re-verified) before
+it's shown in section 3 below. This is a hard gate, same as the copywriter and
+optimizer skills — do not present or apply a title insertion that hasn't
+passed it.
 
 ## Report structure
 

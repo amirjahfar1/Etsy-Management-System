@@ -69,6 +69,7 @@ Respect the rate limit (5 req/s, 5,000/day) — batch listing reads with `get_li
 - <targeted actions>
 - Hand off to **etsy-optimize-listing** to improve tags/photos/SEO on affected listings.
 - Hand off to **etsy-pricing-audit** if price is a suspected driver.
+- If a delisted/expired/inactive listing was a ruled-in factor, hand off to **etsy-audit-listing** (one listing) or **etsy-audit-listings** (several) — this skill only diagnoses the drop, it doesn't fix the listing's state or copy.
 ```
 
 ## Tone and honesty

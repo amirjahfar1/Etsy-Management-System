@@ -26,7 +26,7 @@ Therefore, for **every** order, before **every** write call:
 Call `get_shop_receipts` filtered to unshipped/open orders. For each, get enough detail (`get_shop_receipt`, `get_receipt_transactions_by_receipt` as needed) to show the buyer and the item(s) being sent.
 
 ### 2. Compute deadline / urgency
-Pull processing times via `get_processing_profiles` (and `get_shop_shipping_profile` for the profile attached to each order) to derive each order's ship-by deadline. Compare against today (2026-07-04 unless the environment says otherwise) and bucket each order:
+Pull processing times via `get_processing_profiles` (and `get_shop_shipping_profile` for the profile attached to each order) to derive each order's ship-by deadline. Compare against **today's actual current date** (read from your own current context, never a hardcoded date — this file is not updated daily, so a fixed date here would silently drift wrong) and bucket each order:
 - **Overdue** — past its ship-by date. Highest priority.
 - **Due soon** — within ~1 day of the deadline.
 - **On-track** — comfortable margin.

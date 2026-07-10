@@ -8,6 +8,7 @@ import {
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import axios, { AxiosInstance } from "axios";
+import FormData from "form-data";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,11 +51,14 @@ const etsyClient: AxiosInstance = axios.create({
 });
 
 // --- Multi-account store (accounts.json) ---
-// ETSY_API_KEY/ETSY_SHARED_SECRET (above) are per-app and shared by every
-// account. Each account's shop_id + OAuth tokens live here instead, so
-// connecting another Etsy account never requires touching the generic
-// dispatcher below — just add an entry and (optionally) call
-// set_default_account.
+// ETSY_API_KEY/ETSY_SHARED_SECRET (above) are the default app credentials,
+// used by any account that doesn't carry its own api_key/shared_secret.
+// An account connected through a *different* Etsy Developer App (its own
+// keystring/shared secret) stores those on the account record instead —
+// see the Account interface below. Each account's shop_id + OAuth tokens
+// live here too, so connecting another Etsy account never requires
+// touching the generic dispatcher below — just add an entry and
+// (optionally) call set_default_account.
 const ACCOUNTS_PATH = path.join(__dirname, "..", "accounts.json");
 
 interface Account {
@@ -62,6 +66,11 @@ interface Account {
   shop_name?: string;
   access_token: string;
   refresh_token: string;
+  // Present only when this account was connected through its own Etsy
+  // Developer App (a different app than the default .env credentials).
+  // Falls back to the global API_KEY/SHARED_SECRET when absent.
+  api_key?: string;
+  shared_secret?: string;
 }
 
 interface AccountsFile {
@@ -107,7 +116,7 @@ async function refreshAccessToken(accountName: string) {
     "https://api.etsy.com/v3/public/oauth/token",
     new URLSearchParams({
       grant_type: "refresh_token",
-      client_id: API_KEY!,
+      client_id: account.api_key || API_KEY!,
       refresh_token: account.refresh_token,
     }),
     { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
@@ -124,10 +133,14 @@ function getOauthClient(accountName: string): AxiosInstance {
   const cached = oauthClients.get(accountName);
   if (cached) return cached;
 
+  const account = getAccount(accountName);
+  const apiKey = account.api_key || API_KEY;
+  const sharedSecret = account.shared_secret || SHARED_SECRET;
+
   const client: AxiosInstance = axios.create({
     baseURL: ETSY_API_BASE,
     headers: {
-      "x-api-key": SHARED_SECRET ? `${API_KEY}:${SHARED_SECRET}` : API_KEY,
+      "x-api-key": sharedSecret ? `${apiKey}:${sharedSecret}` : apiKey,
     },
   });
 
@@ -411,6 +424,40 @@ const WRITE_ENDPOINTS: EndpointSpec[] = [
   { name: "get_listings_by_receipt", method: "GET", path: "/application/shops/:shop_id/receipts/:receipt_id/listings", description: "Get the listings that were part of a specific order (receipt)." },
   { name: "get_listings_by_return_policy", method: "GET", path: "/application/shops/:shop_id/policies/return/:return_policy_id/listings", description: "Get all listings using a given return policy." },
   { name: "get_listings_by_section", method: "GET", path: "/application/shops/:shop_id/shop-sections/listings", description: "Get listings in a shop section. Pass shop_section_id as an extra argument." },
+
+  // ShopListing Inventory (4) — variations, SKU, per-variation price/quantity/processing profile.
+  // operationIds: getListingInventory, updateListingInventory, getListingsInventoryByListingIds, getListingProduct
+  { name: "get_listing_inventory", method: "GET", path: "/application/listings/:listing_id/inventory", description: "Get a listing's inventory record: products, variation offerings, per-variation price/quantity/SKU. Listings never edited with Etsy's inventory tools have no inventory record." },
+  { name: "update_listing_inventory", method: "PUT", path: "/application/listings/:listing_id/inventory", description: "Set a listing's variations/SKU/price/quantity. Body needs `products` (array of {sku, offerings: [{quantity, is_enabled, price}], property_values: [{property_id, value_ids, values}]}), plus optional price_on_property/quantity_on_property/sku_on_property (arrays of property IDs)." },
+  { name: "get_listings_inventory_by_ids", method: "GET", path: "/application/listings/batch/inventory", description: "Get inventory records for up to 100 listings at once. Pass listing_ids (comma-separated) as an extra argument." },
+  { name: "get_listing_product", method: "GET", path: "/application/listings/:listing_id/inventory/products/:product_id", description: "Get a single product (one variation combination) from a listing's inventory." },
+  { name: "get_listing_variation_images", method: "GET", path: "/application/shops/:shop_id/listings/:listing_id/variation-images", description: "Get which images are assigned to which variation values on a listing." },
+  { name: "update_variation_images", method: "POST", path: "/application/shops/:shop_id/listings/:listing_id/variation-images", description: "Assign images to variation values. Body needs variation_images: array of {property_id, value_id, image_id}. Overwrites all existing variation images on the listing." },
+
+  // ShopListing Image/Video — read & delete only here (JSON/no-body); uploads need multipart,
+  // see the dedicated upload_listing_image / upload_listing_video tools below.
+  { name: "get_listing_images", method: "GET", path: "/application/listings/:listing_id/images", description: "List all images on a listing." },
+  { name: "delete_listing_image", method: "DELETE", path: "/application/shops/:shop_id/listings/:listing_id/images/:listing_image_id", description: "Delete an image from a listing (a copy stays on Etsy's servers and can be re-assigned by listing_image_id)." },
+  { name: "get_listing_videos", method: "GET", path: "/application/listings/:listing_id/videos", description: "List all videos on a listing." },
+  { name: "delete_listing_video", method: "DELETE", path: "/application/shops/:shop_id/listings/:listing_id/videos/:video_id", description: "Delete a video from a listing (a copy stays on Etsy's servers and can be re-assigned by video_id)." },
+
+  // ShopListing File — the actual digital deliverable buyers download. Read/delete only here
+  // (JSON/no-body); upload needs multipart, see the dedicated upload_listing_file tool below.
+  // Only returns/affects data on listings with listing_type "download"/"both" — physical listings
+  // have no files.
+  { name: "get_all_listing_files", method: "GET", path: "/application/shops/:shop_id/listings/:listing_id/files", description: "List all digital files attached to a listing. Empty result for physical listings." },
+  { name: "get_listing_file", method: "GET", path: "/application/shops/:shop_id/listings/:listing_id/files/:listing_file_id", description: "Get metadata for one digital file attached to a listing." },
+  { name: "delete_listing_file", method: "DELETE", path: "/application/shops/:shop_id/listings/:listing_id/files/:listing_file_id", description: "Delete a file from a listing. WARNING: deleting a digital listing's LAST remaining file converts it back into a physical listing — confirm this is intended, and don't delete the only file on a listing you mean to keep digital." },
+
+  // Shop Return Policies (6) — operationIds: getShopReturnPolicies, getShopReturnPolicy,
+  // createShopReturnPolicy, updateShopReturnPolicy, deleteShopReturnPolicy, consolidateShopReturnPolicies.
+  // create_draft_listing's optional return_policy_id references these.
+  { name: "get_shop_return_policies", method: "GET", path: "/application/shops/:shop_id/policies/return", description: "List a shop's return policies." },
+  { name: "get_shop_return_policy", method: "GET", path: "/application/shops/:shop_id/policies/return/:return_policy_id", description: "Get one return policy." },
+  { name: "create_shop_return_policy", method: "POST", path: "/application/shops/:shop_id/policies/return", description: "Create a return policy. Body needs accepts_returns, accepts_exchanges (both required booleans), and return_deadline (required if either is true — one of 7/14/21/30/45/60/90 days)." },
+  { name: "update_shop_return_policy", method: "PUT", path: "/application/shops/:shop_id/policies/return/:return_policy_id", description: "Update a return policy's accepts_returns/accepts_exchanges/return_deadline." },
+  { name: "delete_shop_return_policy", method: "DELETE", path: "/application/shops/:shop_id/policies/return/:return_policy_id", description: "Delete a return policy (only allowed if no listings use it — move them to another policy first)." },
+  { name: "consolidate_shop_return_policies", method: "POST", path: "/application/shops/:shop_id/policies/return/consolidate", description: "Move all listings from one return policy to another and delete the source policy. Body needs source_return_policy_id, destination_return_policy_id." },
 
   // Shop Management (10) — operationIds: getShop, updateShop, getShopByOwnerUserId, findShops,
   // getShopProductionPartners, getShopSections, createShopSection, getShopSection,
@@ -779,6 +826,167 @@ async function getShopReviews(args: any) {
   };
 }
 
+// --- Multipart uploads (listing images/videos) ---
+// Can't go through the generic JSON dispatcher above — Etsy requires
+// multipart/form-data with a binary file part for these two.
+const MEDIA_TOOLS: Tool[] = [
+  {
+    name: "upload_listing_image",
+    description:
+      "Upload a new image to a listing from a local file path, or re-assign a previously deleted image by listing_image_id. Requires OAuth (listings_w). Confirm with the user before calling (write operation).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        account: { type: "string", description: "Which connected Etsy account to act on. Defaults to the default account if omitted." },
+        shop_id: { type: "number", description: "Shop ID (defaults to the selected account's own shop if omitted)" },
+        listing_id: { type: "number", description: "The listing to attach the image to" },
+        image_path: { type: "string", description: "Absolute local file path of the image to upload. Omit if using listing_image_id instead." },
+        listing_image_id: { type: "number", description: "ID of a previously deleted image to re-assign, instead of uploading a new file." },
+        rank: { type: "number", description: "Position among the listing's images (1 = first/leftmost)." },
+        overwrite: { type: "boolean", description: "When true, replaces the existing image at the given rank." },
+        is_watermarked: { type: "boolean", description: "When true, marks the image as having a watermark." },
+        alt_text: { type: "string", description: "Alt text for the image (max 500 characters)." },
+      },
+      required: ["listing_id"],
+    },
+  },
+  {
+    name: "upload_listing_video",
+    description:
+      "Upload a new video to a listing from a local file path, or re-associate an existing video by video_id. Requires OAuth (listings_w). Confirm with the user before calling (write operation).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        account: { type: "string", description: "Which connected Etsy account to act on. Defaults to the default account if omitted." },
+        shop_id: { type: "number", description: "Shop ID (defaults to the selected account's own shop if omitted)" },
+        listing_id: { type: "number", description: "The listing to attach the video to" },
+        video_path: { type: "string", description: "Absolute local file path of the video to upload. Omit if using video_id instead." },
+        video_id: { type: "number", description: "ID of an existing video (already on the same shop) to associate with this listing, instead of uploading a new file." },
+        name: { type: "string", description: "File name to record for the uploaded video (defaults to the video_path's file name)." },
+      },
+      required: ["listing_id"],
+    },
+  },
+  {
+    name: "upload_listing_file",
+    description:
+      "Upload the actual digital deliverable (the file a buyer downloads) to a digital listing, from a local file path, or re-associate an existing file by listing_file_id. Requires OAuth (listings_w). Confirm with the user before calling (write operation). SAFETY: attaching a file to a listing that is NOT already type 'download'/'both' silently converts it into a digital listing and strips its shipping profile and variations — this tool checks the listing's current type first and refuses unless it's already download/both, or force is set to true.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        account: { type: "string", description: "Which connected Etsy account to act on. Defaults to the default account if omitted." },
+        shop_id: { type: "number", description: "Shop ID (defaults to the selected account's own shop if omitted)" },
+        listing_id: { type: "number", description: "The listing to attach the file to" },
+        file_path: { type: "string", description: "Absolute local file path of the digital file to upload. Omit if using listing_file_id instead." },
+        listing_file_id: { type: "number", description: "ID of an existing file (already on the same shop) to associate with this listing, instead of uploading a new one." },
+        name: { type: "string", description: "File name to record for the uploaded file (defaults to the file_path's file name)." },
+        rank: { type: "number", description: "Display order position among the listing's files (1 = first)." },
+        force: { type: "boolean", description: "Skip the listing_type safety check and upload even if the listing isn't already 'download'/'both'. Only use this if converting the listing to digital is intentional." },
+      },
+      required: ["listing_id"],
+    },
+  },
+];
+
+async function uploadListingImage(args: any) {
+  const accountName = resolveAccountName(args.account);
+  const account = getAccount(accountName);
+  const shopId = args.shop_id || account.shop_id;
+  if (!args.listing_id) throw new Error("Missing required parameter: listing_id");
+  if (!args.image_path && !args.listing_image_id) {
+    throw new Error("Provide either image_path (local file path to upload) or listing_image_id (to re-assign a previously deleted image).");
+  }
+
+  const form = new FormData();
+  if (args.image_path) {
+    const buffer = fs.readFileSync(args.image_path);
+    form.append("image", buffer, path.basename(args.image_path));
+  } else {
+    form.append("listing_image_id", String(args.listing_image_id));
+  }
+  if (args.rank !== undefined) form.append("rank", String(args.rank));
+  if (args.overwrite !== undefined) form.append("overwrite", String(args.overwrite));
+  if (args.is_watermarked !== undefined) form.append("is_watermarked", String(args.is_watermarked));
+  if (args.alt_text) form.append("alt_text", args.alt_text);
+
+  const client = getOauthClient(accountName);
+  const response = await client.request({
+    method: "POST",
+    url: `/application/shops/${shopId}/listings/${args.listing_id}/images`,
+    data: form,
+    headers: form.getHeaders(),
+  });
+  return response.data;
+}
+
+async function uploadListingVideo(args: any) {
+  const accountName = resolveAccountName(args.account);
+  const account = getAccount(accountName);
+  const shopId = args.shop_id || account.shop_id;
+  if (!args.listing_id) throw new Error("Missing required parameter: listing_id");
+  if (!args.video_path && !args.video_id) {
+    throw new Error("Provide either video_path (local file path to upload) or video_id (to re-associate an existing video).");
+  }
+
+  const form = new FormData();
+  if (args.video_path) {
+    const buffer = fs.readFileSync(args.video_path);
+    form.append("video", buffer, path.basename(args.video_path));
+    form.append("name", args.name || path.basename(args.video_path));
+  } else {
+    form.append("video_id", String(args.video_id));
+  }
+
+  const client = getOauthClient(accountName);
+  const response = await client.request({
+    method: "POST",
+    url: `/application/shops/${shopId}/listings/${args.listing_id}/videos`,
+    data: form,
+    headers: form.getHeaders(),
+  });
+  return response.data;
+}
+
+async function uploadListingFile(args: any) {
+  const accountName = resolveAccountName(args.account);
+  const account = getAccount(accountName);
+  const shopId = args.shop_id || account.shop_id;
+  if (!args.listing_id) throw new Error("Missing required parameter: listing_id");
+  if (!args.file_path && !args.listing_file_id) {
+    throw new Error("Provide either file_path (local file path to upload) or listing_file_id (to re-associate an existing file).");
+  }
+
+  const client = getOauthClient(accountName);
+
+  if (!args.force) {
+    const listingRes = await client.get(`/application/listings/${args.listing_id}`);
+    const listingType = listingRes.data?.listing_type;
+    if (listingType !== "download" && listingType !== "both") {
+      throw new Error(
+        `Listing ${args.listing_id} has listing_type "${listingType}", not "download"/"both". Uploading a file here would silently convert it into a digital listing and strip its shipping profile and variations. If that's intentional, set type: "download" via update_listing first (confirm with the user), or pass force: true to override this check.`
+      );
+    }
+  }
+
+  const form = new FormData();
+  if (args.file_path) {
+    const buffer = fs.readFileSync(args.file_path);
+    form.append("file", buffer, path.basename(args.file_path));
+    form.append("name", args.name || path.basename(args.file_path));
+  } else {
+    form.append("listing_file_id", String(args.listing_file_id));
+  }
+  if (args.rank !== undefined) form.append("rank", String(args.rank));
+
+  const response = await client.request({
+    method: "POST",
+    url: `/application/shops/${shopId}/listings/${args.listing_id}/files`,
+    data: form,
+    headers: form.getHeaders(),
+  });
+  return response.data;
+}
+
 // Create and configure MCP server
 const server = new Server(
   {
@@ -794,7 +1002,7 @@ const server = new Server(
 
 // Register tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [...TOOLS, ...WRITE_TOOLS],
+  tools: [...TOOLS, ...WRITE_TOOLS, ...MEDIA_TOOLS],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -829,6 +1037,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: JSON.stringify(await listAccounts(), null, 2) }] };
       case "set_default_account":
         return { content: [{ type: "text", text: JSON.stringify(setDefaultAccount(args), null, 2) }] };
+      case "upload_listing_image":
+        return { content: [{ type: "text", text: JSON.stringify(await uploadListingImage(args), null, 2) }] };
+      case "upload_listing_video":
+        return { content: [{ type: "text", text: JSON.stringify(await uploadListingVideo(args), null, 2) }] };
+      case "upload_listing_file":
+        return { content: [{ type: "text", text: JSON.stringify(await uploadListingFile(args), null, 2) }] };
       default:
         throw new Error(`Unknown tool: ${name}`);
     }

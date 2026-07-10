@@ -9,7 +9,7 @@ This skill is the top-of-funnel diagnostic: a single sweep of the whole shop tha
 
 Only one Etsy account is connected today, but every tool accepts an optional `account` argument. If the user names a specific shop (e.g. "audit svgpngkingdom"), pass that as `account` on each call. Otherwise omit it and the default account is used.
 
-Read `../_shared/etsy-seo-standards.md` if unsure of a field limit or blind spot — it's shared across all four audit/optimize skills so the rules stay consistent.
+Read `../_shared/etsy-seo-standards.md` if unsure of a field limit or blind spot — it's shared across all five audit/optimize/QA skills (including etsy-listing-qa-check) so the rules stay consistent.
 
 ## Why this shape
 
@@ -86,7 +86,8 @@ _As of <date> · <N> active listings_
 
 Close the report by pointing the user to the right drill-down, matched to whatever graded worst:
 - **etsy-audit-listings** — to bulk-diagnose the catalog listing by listing.
+- **etsy-listing-qa-check** — for a fast, mechanical catalog-wide rules-compliance sweep (title/tag field and style rules) if Catalog Structure graded weak but a full strategic bulk audit feels like overkill.
 - **etsy-financial-report** — for a deeper revenue/fee/profit breakdown.
 - **etsy-storefront-audit** — for a deeper branding/policy/storefront review.
 
-Offer the one or two most relevant to this shop's weakest grades rather than listing all three mechanically.
+Offer the one or two most relevant to this shop's weakest grades rather than listing all four mechanically.

@@ -25,6 +25,15 @@ user's own shop. The goal is not to guess "good keywords" from general SEO
 intuition; it's to observe what the current top performers are doing and close
 the gap.
 
+## Tags database — save what this run finds
+
+See `../_shared/tags-database-guide.md` for the full schema and workflow.
+Right after presenting the Keyword Cluster (report section 1 below), ask the
+user: "Save these tags to the tags database for future reuse?" If yes, file
+them under a category you pick based on the niche researched (reusing an
+existing category when the niche matches one already saved), incrementing
+counts for any tag already in the database rather than overwriting it.
+
 ## The honest caveat you must state up front
 
 **Etsy exposes no public search-volume or analytics API.** There is no way to
@@ -84,9 +93,12 @@ cluster to find:
   duplicates of each other, or single words that a multi-word tag already covers
   (Etsy rewards multi-word tags; a lone "svg" tag is low value).
 
-Respect Etsy's hard limits when proposing new tags: **max 13 tags, each ≤ 20
-characters.** Flag any suggested tag that would exceed 20 chars so it can be
-trimmed. Prioritize swapping the weakest existing tags for the highest-frequency
+Respect the field and shop-style rules in `../_shared/etsy-seo-standards.md`
+when proposing new tags: **max 13 tags, each ≤ 20 characters, all
+lowercase**, no exact duplicates of each other or the title. Flag any
+suggested tag that would exceed 20 chars, use an uppercase character, or
+duplicate another tag so it can be fixed before presenting. Prioritize
+swapping the weakest existing tags for the highest-frequency
 missing phrases — don't propose blowing away a listing's whole tag set unless
 it's genuinely all off-target.
 
@@ -106,6 +118,8 @@ count and the theme they belong to. Open this section with the caveat, e.g.:
 | Rank | Phrase | Appears in (of N) | Theme |
 |------|--------|-------------------|-------|
 | 1 | ... | ... | ... |
+
+Immediately after this table, ask the save-to-database question described above.
 
 ### 2. Per-Listing Tag-Swap Plan
 
@@ -133,6 +147,10 @@ title if changed) and wait for an explicit "yes / haan / confirm" for *that
 listing*. Only then make the single call. Move to the next listing and repeat.
 If the user says "do them all," still walk through each one's confirmation — a
 single ambiguous "yes" is not sign-off for a batch.
+
+After all confirmed swaps are applied, offer to run **etsy-listing-qa-check**
+against the updated listing(s) as an independent confirmation that the live
+tags match the shop's field/style rules (length, lowercase, no duplicates).
 
 ## Fallback
 

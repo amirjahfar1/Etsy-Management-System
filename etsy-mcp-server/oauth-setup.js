@@ -161,6 +161,12 @@ async function completeAuth(code, returnedState, { verifier, expectedState, redi
     shop_name,
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
+    // Recorded so the MCP server can use this account's own app credentials
+    // (x-api-key, token refresh) instead of the default .env ones — matters
+    // whenever this account was connected through a different Etsy Developer
+    // App than the default. Harmless to store even when it matches .env.
+    api_key: CLIENT_ID,
+    shared_secret: SHARED_SECRET,
   };
   const isNowDefault = !accountsData.default_account;
   if (isNowDefault) {

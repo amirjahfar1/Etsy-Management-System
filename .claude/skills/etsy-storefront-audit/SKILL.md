@@ -14,8 +14,9 @@ description: >-
   even when the user describes the goal without naming the skill — a request to
   "make my shop look more legit" or "help me organize my catalog" is this skill.
   This skill audits TEXT, STRUCTURE, and ORGANIZATION only; it does not judge the
-  visual quality of banner/logo/photo images and cannot swap them (no image
-  upload tool exists yet).
+  visual quality of banner/logo/photo images. Listing photos can be swapped via
+  upload_listing_image (a manual, confirmed step outside this audit's own scope),
+  but there is still no shop-banner/logo upload tool.
 ---
 
 # Etsy Storefront Audit
@@ -45,11 +46,14 @@ things drive that judgment and this skill checks all three:
 
 This skill reads and critiques **text, structure, and organization**. It can
 read banner/logo presence and listing image counts/URLs, and it will comment on
-branding *language*, but it **cannot judge the visual design quality of any image
-and cannot replace a banner, logo, or listing photo** — there is no image upload
-tool in this MCP server yet. Whenever a fix requires a new visual asset, say so
-explicitly and mark it as a manual step the owner must do in the Etsy UI. Do not
-imply you can do it.
+branding *language*, but it **cannot judge the visual design quality of any
+image**. For listing photos specifically, `upload_listing_image`/
+`upload_listing_video` do exist (if the owner has a replacement file ready and
+confirms it — that's still a separate, deliberate action, not something this
+audit does on its own), but there is **no shop-banner/logo upload tool at
+all** — a banner/logo fix is always a manual step in the Etsy UI. Whenever a
+fix requires a new visual asset, say plainly which of the two situations
+applies rather than implying either is automatically fixable by this audit.
 
 ## Workflow
 
@@ -95,15 +99,17 @@ actual sections and counts you observed.
 
 - Call **`get_featured_listings_by_shop`** for what the shop currently features.
 - Establish a "strongest items" signal from what's available: **`get_shop_reviews`**
-  (shop-level rating/review volume), and `get_listing_details` /
-  `get_listings_by_ids` for review counts, favorites, and any sales signal exposed
-  per listing.
+  (shop-level rating/review volume), `get_reviews_by_listing`/review counts per
+  item, and — for a real sales signal — `get_receipt_transactions_by_shop` counts
+  per listing over a trailing window. **The Etsy API exposes no favorites data at
+  all** — don't use "favorites" as a signal here or claim to read it; review
+  volume/rating and actual sales counts are the only two available proxies.
 
 Compare the two sets. If the featured items are NOT the ones the signal suggests
-are strongest (best-reviewed, most-favorited, clearly best-selling), flag the
-mismatch and name which items *should* be featured instead, with your reasoning.
-Be explicit that sales data via this API is partial — reason from what you have
-and say what you're inferring.
+are strongest (best-reviewed, clearly best-selling by actual sales count), flag
+the mismatch and name which items *should* be featured instead, with your
+reasoning. Be explicit that sales data via this API is partial — reason from
+what you have and say what you're inferring.
 
 ### 4. (Optional) Benchmark against a named competitor
 
