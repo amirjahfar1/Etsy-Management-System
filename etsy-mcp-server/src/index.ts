@@ -819,12 +819,30 @@ async function getListingDetails(args: any) {
 }
 
 async function getShopByName(args: any) {
-  const response = await getPublicClient(args.account).get(
-    `/application/shops/${args.shop_name}`
+  // Etsy has no "get shop by exact name" endpoint — /application/shops/{id}
+  // (getShop) takes a numeric shop_id, so passing a name string there 400s
+  // with "Expected int value for 'shop_id'". The real lookup-by-name path is
+  // findShops (fuzzy search via ?shop_name=), so we search and pick the
+  // case-insensitive exact match to preserve this tool's "by name" contract.
+  const response = await getPublicClient(args.account).get("/application/shops", {
+    params: { shop_name: args.shop_name, limit: 25 },
+  });
+
+  const shop = (response.data.results || []).find(
+    (s: any) => s.shop_name?.toLowerCase() === String(args.shop_name).toLowerCase()
   );
 
-  const shop = response.data;
+  if (!shop) {
+    return {
+      found: false,
+      shop_name_queried: args.shop_name,
+      message: `No shop with the exact name "${args.shop_name}" was found.`,
+      similar_matches: (response.data.results || []).map((s: any) => s.shop_name),
+    };
+  }
+
   return {
+    found: true,
     shop_id: shop.shop_id,
     shop_name: shop.shop_name,
     title: shop.title,
