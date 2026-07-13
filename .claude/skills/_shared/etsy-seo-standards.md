@@ -4,6 +4,7 @@ Read this once per run if any of the field limits or blind spots below are uncle
 
 ## Title — confirmed field rules
 - **Max 140 characters.** Applies to physical, digital, and vintage listings alike.
+- **Target 130-139 characters, not just "under 140."** Per shop instruction: a short title (e.g. 90-100 chars) leaves real keyword-coverage on the table — every additional distinct buyer-search angle (material, occasion, recipient, use-case, style) that fits is another way the listing can match a search. Write toward the top of the range by adding genuine, distinct angles, not by padding with repeated words or filler — see the no-repetition rule below, which still applies at 135 chars same as at 100.
 - **Allowed characters**: letters, numbers, punctuation, mathematical symbols, whitespace, and ™ © ®. The characters **`% : & +` may each be used at most once** in a title — the API rejects a title using any of them twice.
 - **Etsy's own suggested-title feature exists**: `get_listing_details`/`getListing` can return a `suggested_title` field (English-language shops, existing listings only) — worth checking as a sanity comparison when one is available, but never assume it's present.
 - **Search weighting**: Etsy's algorithm weights the **first ~40 characters** most heavily — front-load the primary keyword, don't bury it after descriptive filler.

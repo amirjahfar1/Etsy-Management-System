@@ -88,6 +88,10 @@ This project manages a real, live-money shop. Per the project-wide rule, any
 - After a confirmed create succeeds, fetch the new listing back
   (`get_listing`) and echo the created listing_id and its actual field values,
   so the user sees what landed — not just that the call returned success.
+  **Then write the listings-record file**
+  (`data/listings/<account>/<listing_id>.json`) per
+  `../_shared/listings-record-guide.md` — mandatory for every listing this
+  skill creates, not just the ones built via `etsy-create-listing`.
   Then offer to run **etsy-listing-qa-check** against the new draft as an
   independent confirmation that the live listing matches the rules it was
   drafted against.
@@ -271,8 +275,15 @@ or Recipient]`
   ranking and it costs clicks because it reads as spam. Each segment covers
   a *different* buyer angle: what it is → who it's for or the occasion →
   material/style/format modifier. If two segments share a word, rewrite one.
-- Use most of the 140 characters, but never pad — a tight 110-character
-  title with three distinct angles beats a stuffed 140.
+- **Target 130-139 characters** (shop instruction — maximize keyword
+  coverage, don't stop early). If the first pass lands short (e.g. 90-100
+  chars), don't call it done: add another genuine, distinct buyer-search
+  angle — a second material/style modifier, a specific room/placement, a
+  gift-recipient variant, a size/format callout — anything a real buyer
+  might type that the current draft doesn't yet cover. Never fill the gap
+  with padding or repeated words — every added segment must be a real
+  distinct angle, checked against the no-repetition rule above the same as
+  the rest of the title.
 - If the user asks for a "meta title": Etsy has no separate meta-title
   field — the title IS the Google/page headline. Answer with the title.
 

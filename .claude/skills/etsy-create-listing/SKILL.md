@@ -10,17 +10,23 @@ description: >-
   "create a new listing", "list a new product", "help me add a physical
   product", "help me add a digital product", "list a new item on Etsy",
   "create a draft listing", "set up a listing with sizes/colors", "make a
-  listing and upload the images", "create a digital download listing", or any
-  request to actually build a complete new listing on Etsy rather than just
-  write its text. Use this — not etsy-new-listing-copywriter alone — when the
-  creation flow needs type handling (physical vs digital), variants, image
-  attachment, or a digital-file upload; use etsy-new-listing-copywriter alone
-  when the user just wants the research-backed copy text, or a simple draft
-  with no variants/images/files needed. This skill reuses
-  etsy-new-listing-copywriter's Phase 1 (research) and Phase 2 (generation,
-  through its mandatory Copy QA Gate) for the copy itself — it never
-  reimplements that research — and then owns everything operational that
-  comes after the copy exists.
+  listing and upload the images", "create a digital download listing", "here's
+  a product URL, publish it on my Etsy account", "publish this product to
+  [account]", "list this on [account] too", or any request to actually build a
+  complete new listing on Etsy rather than just write its text — including a
+  bare URL plus a publish instruction with no further detail, since a saved
+  product template (see product-templates-guide.md) may already cover it. Use
+  this — not etsy-new-listing-copywriter alone — when the creation flow needs
+  type handling (physical vs digital), variants, image attachment, or a
+  digital-file upload; use etsy-new-listing-copywriter alone when the user
+  just wants the research-backed copy text, or a simple draft with no
+  variants/images/files needed. This skill reuses etsy-new-listing-copywriter's
+  Phase 1 (research) and Phase 2 (generation, through its mandatory Copy QA
+  Gate) for the copy itself — it never reimplements that research — and then
+  owns everything operational that comes after the copy exists. Before
+  starting fresh research, it also checks for a previously saved product
+  template (by source URL) so republishing the same product to a different
+  account skips straight to the account-specific steps.
 ---
 
 # Etsy Create Listing — Full Guided Creation, End to End
@@ -54,6 +60,21 @@ uncertain at payload-build time, confirm via `etsy-docs` (`get_endpoint`,
 `search_etsy_api`), never guess.
 
 ## Workflow
+
+### Step 0 — Check for a reusable product template
+
+Before anything else: if the user's request includes a source URL (a
+supplier/dropship product page, e.g. Merchize) or names a product that sounds
+like it may have been built before, check for a saved template per
+`../_shared/product-templates-guide.md`. A match means Steps 1-3's
+research/copy/taxonomy/materials/variant-structure/pricing work can be
+skipped entirely and pulled straight from the template — **but every write
+step (shipping/processing profile, `create_draft_listing`,
+`update_listing_inventory`, each image upload) still happens fresh and still
+needs its own confirmation**, since those are account-specific or otherwise
+genuinely new for this run. Skip this step with no output if the request
+clearly isn't sourced from a URL and doesn't name an existing product (a
+plain "let's create a new mug listing" with no prior context needs no check).
 
 ### Step 1 — Physical or digital?
 
@@ -121,11 +142,23 @@ If they tweak it, re-run the Copy QA Gate against the tweaked text.
   `primary_cost`, `secondary_cost`, min/max processing days) — that is its
   own separately-confirmed write, with its own payload shown and its own
   explicit "yes" before calling.
+- `readiness_state_id` — **also required when `type` is `physical`**
+  (confirmed live: omitting it fails `create_draft_listing` with `"A
+  readiness_state_id is required for physical listings."`). Call
+  `get_processing_profiles` alongside the shipping-profile lookup above and
+  present its existing profiles (processing days) the same way; only offer
+  `create_processing_profile` if none fit, as its own separately-confirmed
+  write.
 - Optional but worth asking in one batch: `item_weight` / `item_length` /
   `item_width` / `item_height` with `item_weight_unit` (`oz`,`lb`,`g`,`kg`)
   and `item_dimensions_unit` (`in`,`ft`,`mm`,`cm`,`m`,`yd`,`inches`);
   `materials` (array, letters/numbers/whitespace only — see the shared
-  standards file); `processing_min`/`processing_max`.
+  standards file); `processing_min`/`processing_max`; `styles` (array, up to
+  2, each ≤45 chars, letters/numbers/whitespace only). **`styles` can only be
+  set on this `create_draft_listing` call** — `update_listing` has no
+  `style`/`styles` field at all, so if it's skipped now it cannot be added
+  later through this API (only by deleting and recreating the draft, or
+  editing manually in Etsy's own UI). Ask for it here, don't defer it.
 - **Variants:** ask now — before creating anything — whether the product has
   variations (sizes, colors, etc.), what the exact option sets are (e.g.
   "Small / Medium / Large" or "Red / Blue / Green"), and whether price,
@@ -158,31 +191,81 @@ it will be sent (see Report structure) — re-run the Copy QA Gate one final
 time against the title/tags/description going into it, then stop and wait for
 an explicit "yes / haan / confirm". After the call succeeds, fetch the new
 listing back with `get_listing` and echo the created `listing_id`, its URL,
-and the actual field values that landed — not just "success".
+and the actual field values that landed — not just "success". **Then write
+the listings-record file** (`data/listings/<account>/<listing_id>.json`) per
+`../_shared/listings-record-guide.md` — this is mandatory, not an ask, for
+every listing this skill creates.
 
 ### Step 5 — Variations (physical listings with variants only)
 
 Variations are **not** set via `create_draft_listing` at all — this is a
-separate step against the now-existing listing:
+separate step against the now-existing listing, via `update_listing_inventory`
+(`PUT /listings/{listing_id}/inventory`). Every requirement below is
+confirmed against the live API (`etsy-docs`'s `get_endpoint` for
+`updateListingInventory`/`getListingInventory`, plus errors hit in practice)
+— treat this as the authoritative checklist, not just a rough shape.
+
+**Hard limits, confirmed from the endpoint spec:**
+
+- **Maximum 2 variation properties per listing** (e.g. Size + Color, or here
+  Type + Size). The API has a `max_variations_supported` param that mentions
+  a 3rd property, but it's explicitly marked "Coming soon" in Etsy's own
+  docs — do not plan for 3 today. If the product brief has more than 2
+  independent variant axes, tell the user this is an Etsy platform limit and
+  ask which 2 matter most (or whether some axes should collapse into one
+  property's values, e.g. "Small Red" / "Large Blue" as combined values).
+- **No parenthesis characters `(` or `)`** in any `property_values.values`
+  string — Etsy's schema explicitly disallows them. Reword instead of using
+  them (e.g. "12x18 inch" not "12x18 (inches)").
+
+**Building the payload:**
 
 1. Call `get_listing_inventory` on the new `listing_id`. Read the
    auto-generated default single-product inventory record and the taxonomy's
    available property/value structure — the `property_id`s and `value_id`s
    you may use come from here, not from guessing.
-2. Build the `update_listing_inventory` payload from Step 3's variant
-   answers: a `products` array where each product carries `sku`,
-   `offerings: [{quantity, is_enabled, price}]`, and
-   `property_values: [{property_id, value_ids, values}]`. If price, quantity,
-   or SKU varies by a specific property (e.g. price differs by size), also
-   set `price_on_property` / `quantity_on_property` / `sku_on_property` —
-   arrays of the controlling property IDs.
-3. This is real complexity — walk through it carefully. Show the user the
-   full constructed `products` payload in plain terms ("6 products: 3 sizes ×
-   2 colors, price varies by size: S/M $18, L $22, all quantity 10"),
-   alongside the raw payload, and **wait for its own explicit confirmation
-   before calling `update_listing_inventory`**.
-4. After the call, re-fetch with `get_listing_inventory` and echo the
-   resulting variant table so the user sees what actually landed.
+2. Decide **standard vs custom property** for each variant axis:
+   - **Standard property** (e.g. the taxonomy's built-in "Size" or "Color",
+     which ships with a fixed `possible_values` list): reference it by
+     `property_id` + `value_ids` from that list. No `property_name` needed —
+     Etsy already knows the property's name.
+   - **Custom property** (the variant axis doesn't match anything in the
+     taxonomy — e.g. "Type: 1-side Printed / 2-side Printed" isn't a
+     standard Etsy property): look up the taxonomy's freeform **"Custom
+     Property"** slots via the `etsy-docs` MCP (`getPropertiesByTaxonomyId`
+     for the listing's `taxonomy_id` — they show up with `display_name:
+     "Custom Property"` and an empty `possible_values`). Reference one by
+     `property_id`, supply your own values as free text in `values` (leave
+     `value_ids` empty — Etsy assigns IDs on save), **and you must also send
+     `property_name`** (e.g. `"Type"`) — Etsy has no name of its own for a
+     custom slot. Omitting `property_name` on a custom property fails with
+     `"Expected string value for 'property_name' (got NULL)"`.
+3. Build the `products` array — one entry per variant combination, each with:
+   - `sku` — a unique SKU string per combination if the product has real SKUs
+     (e.g. from a supplier's own SKU sheet); otherwise leave blank.
+   - `offerings: [{quantity, is_enabled, price, readiness_state_id}]` —
+     **every offering needs its own `readiness_state_id`** (same value as the
+     listing's own, from Step 3's `get_processing_profiles` lookup), even
+     though it looks like listing-level data — omitting it fails with
+     `"All offerings need readiness state"`.
+   - `property_values` — **every product must carry the same set of
+     property_ids** (e.g. if product A has Type+Size, product B can't have
+     only Size) — one entry per variant axis, each combination of values
+     across axes appearing exactly once across the whole `products` array.
+4. If price, quantity, SKU, or processing time varies by a specific property
+   (e.g. price differs by size), set the matching top-level array so Etsy
+   knows which axis controls it: `price_on_property`, `quantity_on_property`,
+   `sku_on_property`, `readiness_state_on_property` — each an array of the
+   controlling `property_id`(s).
+5. This is real complexity — walk through it carefully. Show the user the
+   full constructed `products` payload in plain terms ("4 products: 2 types ×
+   2 sizes, price varies by both, quantity uniform at 999"), alongside the
+   raw payload, and **wait for its own explicit confirmation before calling
+   `update_listing_inventory`**.
+6. After the call, re-fetch with `get_listing_inventory` and echo the
+   resulting variant table so the user sees what actually landed. **Update
+   the listings-record file's `variants`** per
+   `../_shared/listings-record-guide.md`.
 
 Skip this step entirely for digital listings and no-variant physical ones.
 
@@ -192,7 +275,9 @@ For each image, in the user's chosen order: show what will be sent
 (`listing_id`, `image_path`, `rank`, `alt_text` if any), get an individual
 confirmation, then call `upload_listing_image`. **One confirmation per
 image — never batch several uploads behind one "yes".** Optional flags
-`overwrite`/`is_watermarked` only if the user asks for them.
+`overwrite`/`is_watermarked` only if the user asks for them. **After each
+successful upload, append it to the listings-record file's `images`** per
+`../_shared/listings-record-guide.md`.
 
 If there's a video: same pattern with `upload_listing_video` (`listing_id`,
 `video_path`, optional `name`) — its own confirmation.
@@ -218,7 +303,11 @@ Re-fetch the listing one last time (`get_listing`, plus `get_listing_images`
 buyer-visible until published), what was attached, and what still needs
 manual action (e.g. "no images yet — required before it can go active", or
 "publish when ready: that's an `update_listing` setting `state: active`, its
-own confirmed write whenever you ask").
+own confirmed write whenever you ask"). Confirm the listings-record file
+(`data/listings/<account>/<listing_id>.json`) is current — it should already be, from
+the incremental writes in Steps 4-6, but this is the last checkpoint before
+handing off to the user. If a later `update_listing` sets `state: active`,
+update that file's `state` too at that point.
 
 ## Safety — every write confirmed individually, no bundling
 
@@ -230,6 +319,7 @@ calls in sequence** — treat each as its own gate:
 
 - `create_draft_listing` — one confirmation (Step 4).
 - `create_shop_shipping_profile` — its own confirmation, if needed (Step 3).
+- `create_processing_profile` — its own confirmation, if needed (Step 3).
 - `update_listing_inventory` — its own confirmation (Step 5).
 - `upload_listing_image` — **one confirmation per image** (Step 6).
 - `upload_listing_video` — its own confirmation (Step 6).
@@ -273,6 +363,7 @@ Listing: <listing_id or "new draft">
 | taxonomy_id | <id — category name> |
 | type | physical / download / both |
 | shipping_profile_id | <id — profile name> (physical only) |
+| readiness_state_id | <id — processing profile label> (physical only) |
 | <any other field being sent> | <value> |
 
 QA: passed (Copy QA Gate, ../_shared/etsy-seo-standards.md) — for writes carrying copy
@@ -309,6 +400,20 @@ Type: physical / download / both
 
 ## Next step
 
+- **The listings-record file already exists** — `data/listings/<account>/<listing_id>.json`
+  was written incrementally through Steps 4-6 per
+  `../_shared/listings-record-guide.md`; no extra action needed here, it's
+  automatic for every listing this skill creates.
+- **Save a reusable product template** — once the user gives final
+  confirmation the finished listing looks good, offer to save everything
+  reusable (copy, taxonomy, materials/styles, variant structure and pricing
+  formula, image source list, shipping profile shape) per
+  `../_shared/product-templates-guide.md`, so publishing the same product to
+  another account later skips the research/pricing/image work. Offer this
+  every time a listing was built from a source URL or supplier page, right
+  after the final summary. If saved, set that template's
+  `published_listings` entry and this listing-record's
+  `product_template_ref` to point at each other.
 - **etsy-listing-qa-check** — run it against the finished listing as an
   independent post-write confirmation that what landed on Etsy actually
   complies with the shop's field/style rules (title length, 13 lowercase

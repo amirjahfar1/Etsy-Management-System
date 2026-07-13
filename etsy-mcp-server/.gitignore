@@ -4,3 +4,9 @@ accounts.json
 
 # Locally-accumulated tag research — shop-specific runtime state, not shareable across shops
 data/tags-database.json
+
+# Saved product templates (full listing payloads for reuse across accounts) — runtime state
+data/products/
+
+# As-built record of every listing this system has created, keyed by listing_id — runtime state
+data/listings/

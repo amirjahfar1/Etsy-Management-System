@@ -127,6 +127,12 @@ The only write tool is **`update_listing`**, against a live, real-money shop.
   listing* before the single `update_listing` call. Never batch-apply.
 - **Revert:** same discipline. When the window closes and it's time to revert,
   re-confirm each listing's before → after individually at execution time.
+- **After each successful `update_listing` call (insertion or revert),
+  sync that listing's `tags` into its record** per
+  `../_shared/listings-record-guide.md`
+  (`data/listings/<account>/<listing_id>.json`) — mandatory, no separate
+  confirmation, so the record reflects what's actually live right now, not
+  what was live before the seasonal rotation.
 
 ## No built-in scheduling — be explicit about that
 

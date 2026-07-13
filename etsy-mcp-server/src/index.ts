@@ -42,7 +42,10 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-// Create axios instance with default config (public, read-only endpoints)
+// Default axios instance for public, read-only endpoints (no account specified).
+// Falls back to this when the caller doesn't pass an `account` — see
+// getPublicClient below, defined after the account store, for the
+// per-account-key-aware version used by the actual tool handlers.
 const etsyClient: AxiosInstance = axios.create({
   baseURL: ETSY_API_BASE,
   headers: {
@@ -89,9 +92,23 @@ function saveAccounts(data: AccountsFile) {
   fs.writeFileSync(ACCOUNTS_PATH, JSON.stringify(data, null, 2) + "\n");
 }
 
-const accountsData: AccountsFile = loadAccounts();
+// `accountsData` is kept fresh by reloading from disk (reloadAccounts) at
+// the start of every read/write path below, rather than trusting the
+// in-memory snapshot from server startup. Without this, a long-running
+// server that started before another process (e.g. `node oauth-setup.js`
+// connecting a new account) wrote to accounts.json would (a) not see that
+// new account at all, and worse (b) silently WIPE it the next time this
+// server did any write of its own (e.g. a token refresh), since a write
+// here means "serialize the in-memory accountsData object back to disk" —
+// and a stale in-memory object omits whatever another process just added.
+let accountsData: AccountsFile = loadAccounts();
+
+function reloadAccounts() {
+  accountsData = loadAccounts();
+}
 
 function resolveAccountName(explicit?: string): string {
+  reloadAccounts();
   const name = explicit || accountsData.default_account;
   if (!name) {
     throw new Error(
@@ -102,12 +119,46 @@ function resolveAccountName(explicit?: string): string {
 }
 
 function getAccount(name: string): Account {
+  reloadAccounts();
   const account = accountsData.accounts[name];
   if (!account) {
     const known = Object.keys(accountsData.accounts).join(", ") || "(none connected yet)";
     throw new Error(`Unknown account "${name}". Known accounts: ${known}`);
   }
   return account;
+}
+
+// Public (no-OAuth) endpoints still need a valid x-api-key header, which is
+// just the app keystring — no access token involved. If the default .env
+// app key is dead/inactive, callers can pass `account` on any public tool
+// to route through that connected account's own api_key/shared_secret
+// instead (falls back to .env when the account doesn't carry its own).
+const publicClients = new Map<string, AxiosInstance>();
+
+function getPublicClient(accountName?: string): AxiosInstance {
+  // No explicit account: prefer the default connected account's own key
+  // (falls back to raw etsyClient only when no account is connected at all).
+  if (!accountName) {
+    reloadAccounts();
+    accountName = accountsData.default_account || undefined;
+    if (!accountName) return etsyClient;
+  }
+
+  const cached = publicClients.get(accountName);
+  if (cached) return cached;
+
+  const account = getAccount(accountName);
+  const apiKey = account.api_key || API_KEY;
+  const sharedSecret = account.shared_secret || SHARED_SECRET;
+
+  const client = axios.create({
+    baseURL: ETSY_API_BASE,
+    headers: {
+      "x-api-key": sharedSecret ? `${apiKey}:${sharedSecret}` : apiKey,
+    },
+  });
+  publicClients.set(accountName, client);
+  return client;
 }
 
 async function refreshAccessToken(accountName: string) {
@@ -121,8 +172,14 @@ async function refreshAccessToken(accountName: string) {
     }),
     { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
   );
-  account.access_token = res.data.access_token;
-  account.refresh_token = res.data.refresh_token;
+  // Reload immediately before writing so this refresh can never clobber an
+  // account another process added to accounts.json since this server started.
+  reloadAccounts();
+  const fresh = accountsData.accounts[accountName];
+  if (fresh) {
+    fresh.access_token = res.data.access_token;
+    fresh.refresh_token = res.data.refresh_token;
+  }
   saveAccounts(accountsData);
 }
 
@@ -178,6 +235,10 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
+        account: {
+          type: "string",
+          description: "Which connected Etsy account's API key to use for this public call (see list_accounts). Defaults to the default account's key, or the app's own .env key if that account has none.",
+        },
         keywords: {
           type: "string",
           description: "Search keywords to find listings",
@@ -222,6 +283,10 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
+        account: {
+          type: "string",
+          description: "Which connected Etsy account's API key to use for this public call (see list_accounts). Defaults to the default account's key.",
+        },
         listing_id: {
           type: "number",
           description: "The numeric ID of the listing",
@@ -245,6 +310,10 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
+        account: {
+          type: "string",
+          description: "Which connected Etsy account's API key to use for this public call (see list_accounts). Defaults to the default account's key.",
+        },
         shop_name: {
           type: "string",
           description: "The name/slug of the shop",
@@ -259,6 +328,10 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
+        account: {
+          type: "string",
+          description: "Which connected Etsy account's API key to use for this public call (see list_accounts). Defaults to the default account's key.",
+        },
         shop_id: {
           type: "number",
           description: "The numeric ID of the shop",
@@ -294,6 +367,10 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
+        account: {
+          type: "string",
+          description: "Which connected Etsy account's API key to use for this public call (see list_accounts). Defaults to the default account's key.",
+        },
         shop_name: {
           type: "string",
           description: "Shop name to search for",
@@ -320,6 +397,10 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
+        account: {
+          type: "string",
+          description: "Which connected Etsy account's API key to use for this public call (see list_accounts). Defaults to the default account's key.",
+        },
         limit: {
           type: "number",
           description: "Number of results to return (1-100, default: 25)",
@@ -340,6 +421,10 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
+        account: {
+          type: "string",
+          description: "Which connected Etsy account's API key to use for this public call (see list_accounts). Defaults to the default account's key.",
+        },
         shop_id: {
           type: "number",
           description: "The numeric ID of the shop",
@@ -582,6 +667,42 @@ function buildPath(template: string, args: any, account: Account): string {
   });
 }
 
+// MCP tool arguments arrive as whatever JSON type the caller sent, but this
+// generic dispatcher's schema declares extra fields as untyped
+// (additionalProperties: true) — so a caller passing an array/object field
+// (tags, materials, image_ids, products, ...) sometimes has it arrive here
+// as the literal string "[\"a\",\"b\"]" instead of a real array. Sent as-is,
+// Etsy either rejects it outright (e.g. tags: "contains invalid characters"
+// from the literal brackets/quotes) or silently misinterprets it. Coerce any
+// string that looks like JSON array/object syntax back into the real type
+// before building the request body.
+function coerceJsonLikeStrings(obj: any): any {
+  const out: any = Array.isArray(obj) ? [] : {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (
+        (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+        (trimmed.startsWith("{") && trimmed.endsWith("}"))
+      ) {
+        try {
+          out[key] = JSON.parse(trimmed);
+          continue;
+        } catch {
+          // Not actually JSON (e.g. a title that legitimately starts with
+          // "[SALE]") — fall through and keep the original string.
+        }
+      }
+      out[key] = value;
+    } else if (value && typeof value === "object") {
+      out[key] = coerceJsonLikeStrings(value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
 async function callWriteEndpoint(spec: EndpointSpec, args: any) {
   const accountName = resolveAccountName(args.account);
   const account = getAccount(accountName);
@@ -589,7 +710,7 @@ async function callWriteEndpoint(spec: EndpointSpec, args: any) {
 
   const params = pathParamNames(spec.path);
   const url = buildPath(spec.path, args, account);
-  const rest: any = { ...args };
+  const rest: any = coerceJsonLikeStrings({ ...args });
   delete rest.account;
   for (const p of params) delete rest[p];
 
@@ -604,6 +725,7 @@ async function callWriteEndpoint(spec: EndpointSpec, args: any) {
 }
 
 async function listAccounts() {
+  reloadAccounts();
   return {
     default_account: accountsData.default_account || null,
     accounts: Object.entries(accountsData.accounts).map(([name, acc]) => ({
@@ -616,7 +738,7 @@ async function listAccounts() {
 }
 
 function setDefaultAccount(args: any) {
-  getAccount(args.account); // throws if unknown
+  getAccount(args.account); // throws if unknown; also reloads accountsData fresh
   accountsData.default_account = args.account;
   saveAccounts(accountsData);
   return { default_account: accountsData.default_account };
@@ -635,7 +757,7 @@ async function searchListings(args: any) {
   if (args.sort_on) params.sort_on = args.sort_on;
   if (args.sort_order) params.sort_order = args.sort_order;
 
-  const response = await etsyClient.get("/application/listings/active", {
+  const response = await getPublicClient(args.account).get("/application/listings/active", {
     params,
   });
 
@@ -663,7 +785,7 @@ async function getListingDetails(args: any) {
   const includes = args.includes?.join(",") || "";
   const params = includes ? { includes } : {};
 
-  const response = await etsyClient.get(
+  const response = await getPublicClient(args.account).get(
     `/application/listings/${args.listing_id}`,
     { params }
   );
@@ -697,7 +819,7 @@ async function getListingDetails(args: any) {
 }
 
 async function getShopByName(args: any) {
-  const response = await etsyClient.get(
+  const response = await getPublicClient(args.account).get(
     `/application/shops/${args.shop_name}`
   );
 
@@ -729,7 +851,7 @@ async function getShopListings(args: any) {
   if (args.sort_on) params.sort_on = args.sort_on;
   if (args.sort_order) params.sort_order = args.sort_order;
 
-  const response = await etsyClient.get(
+  const response = await getPublicClient(args.account).get(
     `/application/shops/${args.shop_id}/listings`,
     { params }
   );
@@ -758,7 +880,7 @@ async function searchShops(args: any) {
     offset: args.offset || 0,
   };
 
-  const response = await etsyClient.get("/application/shops", { params });
+  const response = await getPublicClient(args.account).get("/application/shops", { params });
 
   return {
     count: response.data.count,
@@ -780,7 +902,7 @@ async function getTrendingListings(args: any) {
     offset: args.offset || 0,
   };
 
-  const response = await etsyClient.get("/application/listings/trending", {
+  const response = await getPublicClient(args.account).get("/application/listings/trending", {
     params,
   });
 
@@ -808,7 +930,7 @@ async function getShopReviews(args: any) {
   if (args.min_created) params.min_created = args.min_created;
   if (args.max_created) params.max_created = args.max_created;
 
-  const response = await etsyClient.get(
+  const response = await getPublicClient(args.account).get(
     `/application/shops/${args.shop_id}/reviews`,
     { params }
   );
