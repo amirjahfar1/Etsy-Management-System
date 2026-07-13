@@ -1,6 +1,8 @@
 # Etsy MCP Server
 
-A Model Context Protocol (MCP) server that provides integration with the Etsy API v3. This server enables AI assistants to search for products, get shop information, retrieve listing details, and more on Etsy.
+A Model Context Protocol (MCP) server that provides full integration with the Etsy API v3 — public market research plus OAuth-authenticated shop management (listings, inventory, images, shipping, orders, payments). This server enables AI assistants to search for products, manage a real Etsy shop end-to-end, and more.
+
+> This package is one half of the [Etsy Management System](../README.md) — see the root README for the full tool catalog, the 22 agent skills built on top of this server, and the project's confirm-before-write safety model.
 
 ## Features
 
@@ -23,7 +25,7 @@ A Model Context Protocol (MCP) server that provides integration with the Etsy AP
 3. Create a new app in the [Developer Console](https://www.etsy.com/developers/your-apps)
 4. Copy your API Key (also called "Keystring")
 
-**Note**: For read-only operations (searching, viewing public data), you only need an API key. For operations that access private data or modify data (managing your own shop, orders, listings), you also need an OAuth 2.0 access token — see [OAuth Setup](#oauth-setup-shop-management) below. This server currently ships 7 public-data tools (below); OAuth-backed shop-management tools (orders, listing create/edit, inventory) are not yet implemented in `src/index.ts`, but the token needed to add them is already wired up via `oauth-setup.js`.
+**Note**: For read-only operations (searching, viewing public data), you only need an API key. For operations that access private data or modify data (managing your own shop, orders, listings), you also need an OAuth 2.0 access token — see [OAuth Setup](#oauth-setup-shop-management) below. This server ships ~90 tools total: 7 public-data tools that only need the API key (documented in full below), plus OAuth-backed shop-management tools covering listings, inventory/variations, images/video, digital files, shipping, return policies, shop settings, orders/receipts, and payments — see the [root README's tool catalog](../README.md#tool-catalog) and [CLAUDE.md](../CLAUDE.md#which-tool-to-call--quick-map) for the complete list with exact field requirements.
 
 ## Installation
 
@@ -132,7 +134,9 @@ Scopes requested by default: `shops_r shops_w listings_r listings_w listings_d t
 
 ## Available Tools
 
-All 7 tools below only need the API key (`x-api-key` header) — none of them touch private data, so OAuth is not required for any of them yet.
+This section documents the 7 original public, no-OAuth tools in full parameter detail. For the full ~90-tool catalog (listings, inventory, images, shipping, orders, payments, etc. — all OAuth-authenticated shop-management tools included) see the [root README](../README.md#tool-catalog) and [CLAUDE.md](../CLAUDE.md#which-tool-to-call--quick-map).
+
+All 7 tools below only need the API key (`x-api-key` header) — none of them touch private data, so OAuth is not required for any of them.
 
 | Tool | Etsy endpoint it calls | Use it when you want to... |
 |---|---|---|
@@ -285,8 +289,9 @@ The server includes comprehensive error handling:
 
 ## Limitations
 
-- **Read-only tools**: The 7 registered tools only support read operations (searching, viewing) on public data
-- **OAuth token available, not yet wired into tools**: `npm run oauth` produces an `ETSY_ACCESS_TOKEN`/`ETSY_REFRESH_TOKEN` in `.env`, but `src/index.ts` doesn't have shop-management tools (orders, listing create/edit, inventory) built yet — those need to be added as a follow-up and made to send `Authorization: Bearer <ETSY_ACCESS_TOKEN>` alongside the existing `x-api-key` header
+- **Structured shop policies are read-only via the API**: `policy_payment`, `policy_shipping`, `policy_refunds`, `policy_privacy`, etc. can only be edited through Shop Manager on etsy.com — `update_shop` only writes `title`, `announcement`, `sale_message`, `digital_sale_message`, and (EU shops only) `policy_additional`.
+- **`styles` is create-only**: settable on `create_draft_listing`, but `update_listing` has no field for it — it can't be changed after the draft exists.
+- **No traffic/analytics data**: Etsy's public API exposes no views/favorites/Ads data, so skills relying on this server can diagnose sales drops from order/review/listing signals but can't rule out a pure search-visibility drop with certainty.
 
 ## Contributing
 
