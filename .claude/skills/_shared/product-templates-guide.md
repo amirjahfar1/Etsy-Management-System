@@ -83,7 +83,13 @@ source page exists.
     "combinations": [
       {"sku": "<sku>", "values": {"<axis name>": "<value>"}, "base_cost": 0, "price": 0, "quantity": 999}
     ],
-    "pricing_formula": "<plain-language note, e.g. \"base_cost + $10 flat markup, user-specified\">"
+    "pricing_formula": "<plain-language note, e.g. \"base_cost + $10 flat markup, user-specified\">",
+    "pricing_markup": {
+      "base_markup_type": "flat | percent",
+      "base_markup_value": 0,
+      "shipping_markup_applied": false,
+      "notes": "<e.g. \"Tier 1 base cost + $8 flat, shipping passed through with no markup\" — see etsy-create-listing Step 3's mandatory supplier-sheet + markup-question workflow>"
+    }
   },
   "shipping_template": {
     "profile_title": "<always name it after the product, e.g. \"Welcome Sign Shipping\" — never a generic name like \"Standard Shipping\", so a same-name lookup on a new account can identify a match at a glance>",
@@ -95,7 +101,7 @@ source page exists.
     ],
     "note": "shipping_profile_id and readiness_state_id are account-specific — never reuse the numeric IDs across accounts, only this template's shape. This shape is self-sufficient: every country/region/cost/delivery-day field a fresh create_shop_shipping_profile call needs is already here, so reusing it on a new account never requires re-asking the user for rates."
   },
-  "supplier_sku_sheet_path": "<absolute local path to a supplier cost/SKU spreadsheet, if one was used, or null>",
+  "supplier_sku_sheet_path": "<absolute local path to a supplier cost/SKU spreadsheet — REQUIRED (not null) whenever supplier is \"Merchize\", since every Merchize product ships one; see etsy-create-listing Step 3 for the mandatory read-before-pricing workflow. Null only for suppliers/products that genuinely have no such sheet.>",
   "published_listings": [
     {
       "account": "<connected account name>",

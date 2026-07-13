@@ -117,6 +117,56 @@ If they tweak it, re-run the Copy QA Gate against the tweaked text.
 
 ### Step 3 — Collect the operational fields (branch on Step 1)
 
+**Supplier SKU/pricing sheet — mandatory first, when sourced from Merchize (or any supplier that ships one)**
+
+Before asking anything else in this step: if the product came from Merchize
+(or the user names another supplier that provides a per-product SKU/pricing
+spreadsheet), **that sheet is a hard requirement, not optional** — never
+build variants, a price, or a shipping profile from memory, estimation, or
+a prior listing's numbers. Ask for the absolute local path to the file (or
+the pasted data) and read it before continuing with anything else in this
+step.
+
+Merchize's sheet format (confirmed from the shop's real files):
+
+- Columns: `SKU product`, `Printing method`, `SIZES`, `SKU variant` — one row
+  per variant combination.
+- **Tier-wise pricing** — Merchize prices vary by order-volume tier; **this
+  shop always uses Tier 1** pricing. Confirm the sheet's Tier 1 column/section
+  before reading any cost — never pull a different tier's numbers by mistake.
+- Per-product, also unique and required reading: **base cost**, **shipping
+  cost** (varies by destination country/region — read every row/column
+  Merchize provides, don't assume one flat worldwide rate), **minimum/maximum
+  production time**, and **extra item cost** (the marginal cost for each
+  additional unit in the same order — this maps to the Etsy shipping
+  profile's `secondary_cost`, distinct from the first-item `primary_cost`).
+
+Once the sheet is read, **before building any price or shipping payload, ask
+the user two required questions in one batch — never assume a markup:**
+
+1. **Base price markup** — how much to add on top of Merchize's Tier 1 base
+   cost per variant? Get an exact flat amount or percentage from the user;
+   compute `price = base_cost + markup` (flat) or `base_cost * (1 + pct)`
+   (percentage) per SKU/variant accordingly. State which formula was used
+   in the confirmation payload.
+2. **Shipping markup** — should that same markup also apply to the shipping
+   cost, or should shipping be passed straight through unchanged?
+   - **Yes** → apply the same markup rule to `primary_cost`/`secondary_cost`
+     when building the shipping profile.
+   - **No** → use Merchize's shipping cost and extra-item cost exactly as
+     given (zero added margin) for `primary_cost`/`secondary_cost`.
+
+Show both answers plainly in the write-confirmation payload (Step 4/Step 5's
+report) so the markup is visible next to the numbers it produced, not hidden
+inside a pre-computed price. Save the sheet's absolute path to
+`supplier_sku_sheet_path` and the exact markup rule (e.g. "Tier 1 base cost +
+$8 flat, shipping passed through with no markup") into the product
+template's `variants.pricing_markup` per
+`../_shared/product-templates-guide.md`, so a future republish of the same
+product doesn't require re-reading the sheet from scratch — but always
+re-confirm with the user that the saved markup numbers still apply before
+reusing them, since markup strategy can change between runs.
+
 **Universal (both types)** — all verified required fields of
 `createDraftListing`:
 
