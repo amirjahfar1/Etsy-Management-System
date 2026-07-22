@@ -678,8 +678,7 @@ function calc() {
     warnBox.innerHTML = '<div class="warn">Combined fee rate is extremely high — double check the fee inputs above.</div>';
   }
 
-  const discountPct = num('discount');
-  const instruction = `Set this listing's price to ${fmt(listMin)}, with a ${discountPct}% discount running on it. After the discount, the buyer will pay ${fmt(primary.salePrice)}, which covers the ${fmt(cost)} landed cost and leaves ${fmt(primary.profit)} profit (${primary.margin.toFixed(1)}% margin, ${cost > 0 ? ((primary.profit / cost) * 100).toFixed(1) : '0'}% ROI). Breakeven listing price is ${fmt(breakeven)}.`;
+  const instruction = `Set this listing's price to ${fmt(listMin)}.\nThat's the "Listing price on Etsy" value above — no other fields need to change.`;
   document.getElementById('instructionOut').value = instruction;
 
   renderVariantTable(settings);
