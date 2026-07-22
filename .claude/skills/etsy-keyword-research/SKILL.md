@@ -28,10 +28,10 @@ the gap.
 ## Tags database — save what this run finds
 
 See `../_shared/tags-database-guide.md` for the full schema and workflow.
-Right after presenting the Keyword Cluster (report section 1 below), ask the
-user: "Save these tags to the tags database for future reuse?" If yes, file
-them under a category you pick based on the niche researched (reusing an
-existing category when the niche matches one already saved), incrementing
+Right after presenting the Keyword Cluster (report section 1 below),
+**automatically save these tags to the tags database — no need to ask.**
+File them under a category you pick based on the niche researched (reusing
+an existing category when the niche matches one already saved), incrementing
 counts for any tag already in the database rather than overwriting it.
 
 ## The honest caveat you must state up front
@@ -119,7 +119,7 @@ count and the theme they belong to. Open this section with the caveat, e.g.:
 |------|--------|-------------------|-------|
 | 1 | ... | ... | ... |
 
-Immediately after this table, ask the save-to-database question described above.
+Immediately after this table, save to the tags database automatically as described above — no need to ask.
 
 ### 2. Per-Listing Tag-Swap Plan
 

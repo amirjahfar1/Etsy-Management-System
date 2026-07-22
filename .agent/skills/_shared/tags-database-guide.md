@@ -51,15 +51,15 @@ ever researched, how often has this tag shown up." `status` is `common` if
 already used across every audit/optimize skill for pattern-detection),
 otherwise `unique`.
 
-## When to offer to save (research/audit skills)
+## When to save (research/audit skills) — always, no confirmation needed
 
 Any skill that produces a tag frequency table, tag frequency analysis, or a
-keyword/tag cluster from competitor or best-seller research — right after
-presenting that finding to the user, ask: **"Save these tags to the tags
-database for future reuse? (yes/no)"** Don't ask again later in the same run
-if they already answered.
-
-If yes:
+keyword/tag cluster from competitor or best-seller research **always saves
+those tags to the tags database — automatically, without asking.** This is
+local bookkeeping, not an Etsy write (the same reasoning as the
+listings-record file's "mandatory, not an ask" rule) — there is no downside
+to keeping a tag's `times_seen` count current, so don't spend a turn asking
+permission for it.
 
 1. Read the database file (create it with the skeleton above if it doesn't
    exist).
@@ -78,19 +78,27 @@ If yes:
    exists in that category, **increment** `times_seen`/`sample_size`
    cumulatively (never overwrite), append an entry to `sources`, update
    `last_seen`, and recompute `status` off the new cumulative totals.
-4. Write the file back, update `last_updated`. Confirm briefly what happened,
+4. Write the file back, update `last_updated`. State briefly what happened,
    e.g. "Saved 9 tags to `boho-wall-decor` — 6 new, 3 updated counts on
-   existing tags."
-
-If no: skip silently and move on.
+   existing tags." No confirmation needed before or after — this always
+   happens as part of presenting the research.
 
 ## When to offer reuse (create/optimize skills)
 
 Before starting fresh keyword/tag research, check the database for a
 category matching the target product/niche. If a match exists with saved
 tags, show the user the saved tags for that category (with their
-`status`/`times_seen`) and ask: **"Use these existing saved tags as a
-starting point, or should I do fresh research?"**
+`status`/`times_seen`, and the category's `last_updated`) and ask — **but
+don't frame it as a neutral either/or once the data is stale.** If
+`last_updated` is within the last ~90 days (see
+`../_shared/etsy-seo-standards.md`'s Research Constants), ask neutrally:
+**"Use these existing saved tags as a starting point, or should I do fresh
+research?"** If it's older than ~90 days, default the framing toward a
+refresh instead: **"These tags are N months old — I'd recommend fresh
+research since ranking patterns may have shifted, but I can reuse the saved
+set if you'd rather save the round-trip."** Either way, the final choice is
+still the user's — this only changes which option is presented as the
+recommended default, not what's allowed.
 
 - **Use saved tags:** treat them as this run's tag findings — skip the live
   competitor tag-frequency pull, but still re-validate every tag against the

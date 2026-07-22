@@ -2,6 +2,127 @@
 
 Read this once per run if any of the field limits or blind spots below are unclear. Keeping this in one place means a fix here (e.g. a tag-length rule) doesn't require editing every skill that touches listing copy. Facts below are confirmed straight from the live Etsy Open API schema (`etsy-docs` MCP, `createDraftListing`/`updateListing`) and Etsy's own seller-handbook guidance — not guessed.
 
+## Listing Completeness Gate — mandatory, no exceptions
+
+**A listing is never created, and a draft is never handed off as "done," until every
+field in this checklist is actually collected/set — not just planned or promised for
+later.** This is the single source of truth for "what does a complete listing need";
+`etsy-create-listing` enforces it as a hard block before `create_draft_listing`, and
+`etsy-listing-qa-check` re-checks it against every existing draft/active listing (drafts
+built before this gate existed, or edited outside this system, are exactly the gap that
+re-check covers). If any required item below is missing, **do not call
+`create_draft_listing`** — stop and get the missing item from the user first. "The user
+can add it later" is not an exception; get it now or don't create the listing yet.
+
+**Required on every listing, physical or digital:**
+- `title` — non-empty, ≤140 chars.
+- `description` — non-empty.
+- `price` — a real number > 0 (the exact price the user confirmed, not a placeholder).
+- `quantity` — set (999 by the shop's own default rule, but must be explicitly sent).
+- `who_made`, `when_made` — both set, never left to default.
+- `taxonomy_id` — set to a real, looked-up category, never guessed-and-skipped.
+- `type` — explicitly `physical` / `download` / `both`, never left to the API default.
+- **Exactly 13 tags** — every slot filled, none empty, none uppercase, none duplicate
+  (see the Tags rules below).
+- **At least 1 image uploaded.** A listing with zero images is incomplete — full stop.
+  Do not create the draft first and "add images later" as the plan; collect at least
+  one real image path from the user *before* the `create_draft_listing` confirmation.
+  If the user genuinely has no image ready yet, pause the whole creation flow and come
+  back once they do — don't create a photo-less draft "to hold the spot." This applies
+  to every skill offering a draft-creation path, not just `etsy-create-listing` —
+  `etsy-new-listing-copywriter`'s own create offer is bound by it too.
+- **Image count/order — soft standard, not a hard block.** Target **8-10 images**;
+  below 5, say so plainly in the final summary as a real conversion risk (buyers
+  expect a full gallery, not a floor-only listing). Recommended order: hero/
+  product-alone shot first (the thumbnail), lifestyle/context shots second, detail/
+  scale shots next, the size chart (apparel — itself mandatory, see below) ideally
+  ranked 2nd-3rd rather than last, and a personalization example last for
+  personalized items. This is a quality flag, not a `create_draft_listing` blocker —
+  don't hold up a listing over image count the way a missing image entirely blocks
+  it.
+
+**Required additionally for physical listings (`type: physical` or `both`):**
+- `shipping_profile_id` — a real profile id from `get_shop_shipping_profiles` (or a
+  freshly created one), never omitted.
+- `readiness_state_id` — from `get_processing_profiles`; required by the API itself
+  (`"A readiness_state_id is required for physical listings."` if omitted) and required
+  on every `offerings` entry in the inventory record too.
+- If the listing has real variants (size/color/etc.), the `update_listing_inventory`
+  call must actually have been made — a variant product left on Etsy's auto-generated
+  single-product default when the copy/title clearly describes multiple options is an
+  incomplete listing, not a finished simple one.
+- **Any clothing/apparel listing requires a size chart image uploaded to the
+  gallery** before the listing is considered complete — regardless of supplier or
+  source (AliExpress, Merchize, Printify, hand-made, or any other origin). Ask the
+  user for it (the supplier's own chart, a screenshot, or an image link) and upload
+  it like any other listing image; don't let a clothing listing reach
+  `create_draft_listing` — or, for `etsy-copy-listing`, finish its image step —
+  without one. If a size chart already exists among the product's own source images,
+  that satisfies the requirement.
+
+**Required additionally for digital listings (`type: download` or `both`):**
+- At least **1 file attached** via `upload_listing_file` — the actual buyer download.
+  A digital listing with no file is not sellable; `get_all_listing_files` must return a
+  non-empty result before the listing is considered complete.
+
+**Required additionally when the product is personalizable** (a name, text, photo, or
+size the buyer enters at checkout — anything the title/description implies as
+"custom"/"personalized"/"add your name" etc.):
+- `personalization_questions` set via `update_listing_personalization` — a listing that
+  reads as customizable but has no personalization question configured means the buyer
+  has no way to actually tell the shop what they want. `get_listing_personalization`
+  must return at least one question.
+
+**Must get an explicit answer (yes, a value, or an explicit skip) — never silently
+omitted, even though these aren't hard `create_draft_listing` blockers:**
+- `materials` — get at least 1 real material for every physical listing (a genuine
+  filtered-search field; a listing that skips it is quietly less discoverable).
+- `styles` (physical, **create-time only** — `update_listing` has no `style`/`styles`
+  field at all, so a skipped-now styles field is permanently lost, not deferred).
+- `shop_section_id` — pick from `get_shop_sections`, or an explicit "no section."
+- `return_policy_id` — pick from `get_shop_return_policies` (physical and digital
+  alike).
+- `item_weight`/`item_length`/`item_width`/`item_height` with units,
+  `processing_min`/`processing_max`, a listing video — genuinely optional, but still
+  worth asking about once rather than never raising them.
+
+## Image alt text — standing default, set automatically, no need to ask
+
+Every image uploaded (`upload_listing_image`) gets `alt_text` set to the
+listing's own tags, joined as a plain comma-separated list (e.g. "Blonde
+Hoodie, Viral Hoodie, Trendy Hoodie, ..."), every time — this is a standing
+default per explicit user instruction, not something to ask about per
+listing. Set it at upload time (`alt_text` param) when possible; for images
+already uploaded without it, `upload_listing_image` can update an existing
+image's `alt_text`/`rank` in place by passing its `listing_image_id` (no
+`image_path`) — confirmed live, this does **not** require deleting the
+image first, despite the tool description mentioning `listing_image_id`
+mainly in the context of re-assigning a *deleted* image. Etsy's `alt_text`
+field caps at 500 characters, comfortably enough for all 13 tags joined.
+
+## Final-report verification — mandatory before telling the user a draft is done
+
+Any time a skill reports the result of building/cloning a draft listing
+(the Step 5 / final-summary style report), verify — don't just recite what
+was *intended* — against the listing's actual current state:
+
+- **Images**: re-check `get_listing_images` (or the upload responses
+  already in hand) actually shows every image that was supposed to be
+  uploaded. Don't report "N images uploaded" from memory of the plan;
+  confirm the count matches what's live.
+- **Variants**: if variants were supposed to be created, confirm
+  `update_listing_inventory`'s response (or a fresh `get_listing_inventory`)
+  actually contains every combination that was promised — count them
+  against the expected size × color (or whatever axes) matrix, not just
+  "the call returned 200."
+
+If anything expected is missing from the live result, **mark it plainly
+with an emoji** (e.g. ⚠️ or ❌) in the report rather than a plain-text aside
+that's easy to skim past — this is a deliberate, explicit user instruction
+for how gaps must be surfaced, not just a style preference. If everything
+checks out, a short explicit confirmation (e.g. "✅ all 5 images present,
+all 15 variants added") is expected too, not just silence implying success.
+
 ## Title — confirmed field rules
 - **Max 140 characters.** Applies to physical, digital, and vintage listings alike.
 - **Target 130-139 characters, not just "under 140."** Per shop instruction: a short title (e.g. 90-100 chars) leaves real keyword-coverage on the table — every additional distinct buyer-search angle (material, occasion, recipient, use-case, style) that fits is another way the listing can match a search. Write toward the top of the range by adding genuine, distinct angles, not by padding with repeated words or filler — see the no-repetition rule below, which still applies at 135 chars same as at 100.
@@ -54,23 +175,27 @@ without clearing every item below.
    lowercase, no exact duplicates; description hook ≤~160 chars. Re-count after any
    QA-driven rewrite — fixing one check can silently break another (e.g. splitting a
    long sentence to fix reading level can push the title over 140 chars).
-5. **No copyrighted/trademarked names in title, tags, or description** — character
-   names, franchise names, brand logos ("Disney", "Bluey", "Pokemon", sports team
-   names, etc.) unless the shop has stated it holds a license. This is a real Etsy
-   takedown risk, not just a style note — flag it plainly if research copy or a
-   product brief includes one, and ask the user before including it.
-6. **No misleading or unverifiable claims** — no fake urgency ("only 1 left!" unless
+5. **No misleading or unverifiable claims** — no fake urgency ("only 1 left!" unless
    true), no unverifiable safety/medical claims (relevant for kids' products), no
    "as seen on TV" or similar unearned authority claims.
-7. **Not copied verbatim from a competitor listing.** Research (Phase 1 / step 2 in
+6. **Not copied verbatim from a competitor listing.** Research (Phase 1 / step 2 in
    the copywriter and optimizer skills) reads competitor titles/tags/descriptions to
    find patterns — the draft must be original phrasing inspired by those patterns,
    never a lifted sentence or near-identical paragraph.
-8. **No leftover placeholders or template artifacts** — no "[insert X]", no stray
+7. **No leftover placeholders or template artifacts** — no "[insert X]", no stray
    brackets, no double spaces or dangling punctuation from an edit pass.
-9. **Tone matches the shop's chosen voice** (see the shop's `announcement`/`get_shop`
+8. **Tone matches the shop's chosen voice** (see the shop's `announcement`/`get_shop`
    bio, or whatever tone the user has explicitly set) — don't let one listing read
    playful and another read corporate if the shop has settled on a voice.
+9. **No country-of-manufacture / origin wording anywhere in title or description** —
+    never write "China", "Made in China", "CN", "Mainland China", "Jiangxi" (or any
+    other supplier-country/province name), or similar origin phrasing pulled straight
+    from a supplier's (AliExpress/Merchize/etc.) own spec sheet. Supplier spec blocks
+    routinely include a `Place Of Origin` / `CN` field — when reusing a supplier's raw
+    title/description as a starting point, strip every origin/location line before it
+    ever reaches the draft the user sees. This is a shop-style rule (buyers reading
+    "China" in the copy hurts perceived quality/handmade positioning), not an Etsy API
+    rule, so it won't cause a rejection — but it's a hard check same as the others above.
 
 State in the report that this checklist was run (a one-line "QA: passed" note is
 enough) — don't just apply it silently.
@@ -91,13 +216,42 @@ The read tools used here don't reliably distinguish a sale price from list price
 - **`materials` / `who_made` / `when_made`**: category-relevant completeness on these affects filtered-search matching, same logic as other attributes.
 
 ## Blind spots — state these plainly, never paper over them
-- No analytics/traffic data exists via this API: no views, no favorites trend, no visitor funnel, no click-through data.
+- No analytics/*trend* data exists via this API: no historical views-over-time, no
+  visitor funnel, no click-through, no conversion data. `getListing` **does** return
+  each listing's current cumulative `num_favorers` and, for active listings, a
+  daily-tabulated `views` count (can read 0 for reasons unrelated to actual traffic —
+  treat as directional, not exact) — `etsy-new-listing-copywriter`'s Step 2 uses these
+  to weight the competitor-research sample toward listings with real proof of demand.
+  It's a snapshot, not a trend, and still says nothing about a *new* listing's own
+  future performance.
 - No Etsy Ads API — ad performance can't be measured directly.
 - `upload_listing_image`/`upload_listing_video`/`upload_listing_file` tools exist (multipart upload from a local file path) — recommending and actually uploading a new/better photo or video is possible. What's still a real gap: **judging photo quality, lighting, or composition programmatically** — that's a human-judgment call every time, and there's still no shop-banner/logo upload tool (listing-level media only).
 - Discounts/sale pricing aren't reliably exposed (see above).
 
 ## When a field name is uncertain
 Don't guess. Use the read-only `etsy-docs` MCP: `get_endpoint(operationId)` or `search_etsy_api` to confirm the exact field before relying on it in a report or a write payload.
+
+## Research constants — single source of truth, don't restate a different number elsewhere
+
+These numbers are used by `etsy-new-listing-copywriter`, `etsy-optimize-listing`,
+`etsy-copy-listing`, and `etsy-listing-qa-check`. If a value needs to change, change
+it here — a skill file should reference this section, not hardcode its own copy of
+the number:
+
+- **External benchmark sample size:** top **10-15** `search_listings` results per
+  candidate phrase, relevance-screened first (drop anything not genuinely the same
+  product type before tallying).
+- **"Common" tag/pattern threshold:** appears in **at least half the sample**
+  (e.g. 8+ of 15) — this is also the tags database's `common` vs `unique` cutoff.
+- **Internal benchmark window:** trailing **90 days**, listings with **≥5 sales**
+  count as winners, need **≥3 qualifying winners** to run the benchmark at all; if
+  fewer than 3 at 90 days, widen once to **180 days** before skipping it entirely.
+- **Shipping/processing default (this shop's standing rule, not an Etsy default):**
+  **3-5 days**, used by `etsy-copy-listing` for every clone regardless of the
+  source's own processing time.
+- **Tags database staleness:** saved tags older than **~90 days** should be offered
+  as "refresh recommended" rather than a neutral reuse-or-research choice — see
+  `../_shared/tags-database-guide.md`.
 
 ## Seasonality awareness
 Before flagging a listing's tags/title as a problem, check whether it currently carries deliberately-inserted seasonal keywords (see `etsy-seasonal-keywords`) that are mid-window — don't recommend stripping those out just because they look like a temporary oddity. Also, when prioritizing fixes, weigh whether a gift-buying window (e.g. Christmas, Valentine's, Mother's Day) is approaching — seasonal readiness can outrank a generic fix if the timing is close.

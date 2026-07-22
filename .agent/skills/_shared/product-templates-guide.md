@@ -102,6 +102,11 @@ source page exists.
     "note": "shipping_profile_id and readiness_state_id are account-specific — never reuse the numeric IDs across accounts, only this template's shape. This shape is self-sufficient: every country/region/cost/delivery-day field a fresh create_shop_shipping_profile call needs is already here, so reusing it on a new account never requires re-asking the user for rates."
   },
   "supplier_sku_sheet_path": "<absolute local path to a supplier cost/SKU spreadsheet — REQUIRED (not null) whenever supplier is \"Merchize\", since every Merchize product ships one; see etsy-create-listing Step 3 for the mandatory read-before-pricing workflow. Null only for suppliers/products that genuinely have no such sheet.>",
+  "personalization_research": {
+    "common_fields": ["<e.g. \"name/text input\", \"color choice\", \"font choice\" — from etsy-new-listing-copywriter Step 2's competitor tally, fields in at least half the benchmark sample>"],
+    "optional_fields": ["<e.g. \"hardware/attachment type\", \"multiple names\" — 1-2 listings only>"],
+    "supplier_capability_notes": "<what the supplier's own product page said about how a buyer's personalization reaches production (auto per-order vs. shop hand-builds from a template) per etsy-create-listing Step 3, or \"unconfirmed — verify with supplier\" if the page didn't say>"
+  },
   "published_listings": [
     {
       "account": "<connected account name>",
@@ -161,9 +166,9 @@ or do fresh research?"**
 
 - **Reuse:** skip Step 2 (research/copy) and the copy/taxonomy/materials/
   styles/variant-structure/pricing-formula parts of Step 3 entirely — pull
-  them straight from the template. **Still go through every other step
-  normally**: Step 3's shipping-profile and processing-profile lookups are
-  account-specific and must be redone for *this* account —
+  them straight from the template. **Still go through every other
+  step normally**: Step 3's shipping-profile and processing-profile lookups
+  are account-specific and must be redone for *this* account —
   1. Call `get_shop_shipping_profiles`/`get_processing_profiles` on the
      target account and check for a profile whose **name matches the
      template's `shipping_template.profile_title`** (shipping profiles are

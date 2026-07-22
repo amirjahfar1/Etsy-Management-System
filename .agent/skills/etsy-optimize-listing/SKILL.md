@@ -47,7 +47,7 @@ Diffing the target against both, rather than against best-practice theory alone,
    - **Tags** — the exact tags each listing uses.
    Treat a pattern as real only if **at least half the sample shares it** — 2 listings doing the same thing is coincidence, not a signal. State plainly that ranking is also driven by factors this rewrite cannot copy (listing age, historical conversion rate, review volume) — matching a top listing's structure doesn't guarantee matching its rank.
 
-4. **Run a tag frequency analysis and report it as counts, not a vibe.** Tally every tag across the full benchmark set. Report explicitly which tags are **common** (used by a majority of the benchmark — high-signal, worth including) versus **unique/long-tail** (used by only one or two listings — lower competition, worth testing) — e.g. "7 of the 13 recommended tags appear in 60%+ of the benchmark; 4 are unique long-tail finds used by only one listing." This tag list is what step 8 builds the title and description around — **tags come first, then copy is written to work the winning tags in naturally**, not the other way around. Right after presenting this analysis (skip if this run used saved database tags from step 2 rather than fresh research), ask: "Save these tags to the tags database for future reuse?" — see `../_shared/tags-database-guide.md` for the save workflow.
+4. **Run a tag frequency analysis and report it as counts, not a vibe.** Tally every tag across the full benchmark set. Report explicitly which tags are **common** (used by a majority of the benchmark — high-signal, worth including) versus **unique/long-tail** (used by only one or two listings — lower competition, worth testing) — e.g. "7 of the 13 recommended tags appear in 60%+ of the benchmark; 4 are unique long-tail finds used by only one listing." This tag list is what step 8 builds the title and description around — **tags come first, then copy is written to work the winning tags in naturally**, not the other way around. Right after presenting this analysis (skip if this run used saved database tags from step 2 rather than fresh research), automatically save these tags to the tags database — no need to ask — see `../_shared/tags-database-guide.md` for the save workflow.
 
 5. **Pull the internal benchmark — the shop's own winners, defined precisely.** Pull `get_receipt_transactions_by_shop` over a **trailing 90-day window** (or the last ~100 transactions if the shop is slow, whichever gives more signal), count sales per `listing_id`, and only treat a listing as a "winner" if it has **at least 5 sales** in that window. Prefer winners that are the **same product type / section** as the target — a top-selling listing from a completely different product line has the wrong title cadence to imitate. **If fewer than 3 listings qualify as winners, skip the internal benchmark and say so explicitly in the report** rather than forcing a comparison against a thin or mismatched sample. Batch listing detail lookups with `get_listings_by_ids` — respect the 5 req/s, 5,000/day limit.
 
@@ -64,7 +64,7 @@ Diffing the target against both, rather than against best-practice theory alone,
 
 9. **Run the Copy QA Gate before presenting the diff.** The full checklist lives in
    `../_shared/etsy-seo-standards.md` — no em dashes, grade 5-7 reading level, no
-   AI-tell phrasing, no copyrighted/trademarked names, no misleading claims, not
+   AI-tell phrasing, no misleading claims, not
    copied verbatim from the competitor benchmark read in step 2-3, no leftover
    placeholders, tone matches the shop's voice. **This is a hard gate: the NEW
    title/tags/description must pass it before the diff is shown to the user, and
@@ -123,7 +123,7 @@ external benchmark alone and is lower-confidence>
 
 ## QA
 Passed — see ../_shared/etsy-seo-standards.md Copy QA Gate (no em dashes,
-grade 5-7 reading level, no AI-tell phrasing, no trademarked names, not
+grade 5-7 reading level, no AI-tell phrasing, not
 copied from the competitor benchmark).
 
 ## Watch after applying

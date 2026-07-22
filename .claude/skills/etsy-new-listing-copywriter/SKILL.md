@@ -73,6 +73,13 @@ This project manages a real, live-money shop. Per the project-wide rule, any
   no confirmation needed for any research step.
 - Do **not** call `create_draft_listing` unprompted. Offer it once, at the end
   of the report, as an option.
+- **Per the Listing Completeness Gate (`../_shared/etsy-seo-standards.md`): a
+  draft is never created with zero images, full stop — this skill's create
+  offer is not an exception.** Before offering to create the draft, collect
+  at least one real local image path (or confirm one is already at hand). If
+  the user has no image ready yet, deliver the copy-paste blocks only and
+  hold the create offer until they do — never create a "photo-less draft to
+  hold the spot."
 - If the user *does* want the draft created: show the **exact payload**
   (title, tags, description, price, quantity, who_made, when_made,
   taxonomy_id, shipping profile — every field that will be sent), then stop
@@ -95,12 +102,14 @@ This project manages a real, live-money shop. Per the project-wide rule, any
   Then offer to run **etsy-listing-qa-check** against the new draft as an
   independent confirmation that the live listing matches the rules it was
   drafted against.
-- Note the listing is created as a **draft** (inactive) — offer to add photos
-  via `upload_listing_image`/`upload_listing_video` if the owner has files
+- Note the listing is created as a **draft** (inactive), with the one (or
+  more) collected image(s) already uploaded as part of the same confirmed
+  flow — not promised for later. Offer to add further photos/video via
+  `upload_listing_image`/`upload_listing_video` if the owner has more files
   ready locally (each upload still needs its own confirmation), otherwise
-  they can add them in Etsy's UI. Either way, say plainly that the draft
-  isn't buyer-visible until photos are added and it's published — don't let
-  the user assume a finished listing exists yet.
+  they can add them in Etsy's UI. Say plainly that the draft isn't
+  buyer-visible until it's published — don't let the user assume a finished,
+  live listing exists yet.
 
 ---
 
@@ -141,9 +150,14 @@ and forces a second round-trip. Instead, alongside the brief in Step 0:
   reuse one or two) rather than asking them to know a raw ID.
 - Ask `who_made` (i_did / someone_else / collective), `when_made`, and
   `quantity` as plain questions.
-- Resolve `taxonomy_id` from the product brief — if the right category isn't
-  obvious, confirm via the `etsy-docs` MCP (`search_etsy_api`/`get_endpoint`)
-  rather than guessing or asking the user for a raw taxonomy_id number.
+- Resolve a best-inferred `taxonomy_id` from the product brief — look it up
+  via the `etsy-docs` MCP (`search_etsy_api`/`get_endpoint`), never guess a
+  raw number with no lookup behind it — then **present the category name
+  and id to the user and get explicit confirmation** (use it, or name a
+  different one) before it enters the create payload. Same standing rule as
+  `etsy-create-listing` Step 3: a valid-but-wrong category won't error at
+  `create_draft_listing`, it'll just misfile the listing silently, so the
+  live API accepting it is not a substitute for asking.
 
 Skip this step entirely if the user only wants copy-paste text with no
 `create_draft_listing` call in play.
@@ -158,13 +172,24 @@ Step 2 tests them.
 First check the tags database (`../_shared/tags-database-guide.md`) for a
 category matching the product brief. Then, before researching, ask the user
 directly — the same question `etsy-optimize-listing` asks, for consistency,
-adding a third option if a matching database category exists: "Do you want
-to give me specific competitor / best-selling listings to benchmark against,
-should I search for them myself using these candidate keywords: `<list>`, or
-should I use the saved tags already in the database for `<category>`?"
+with a fourth option added here for preferred-tags-in-hand cases: "Do you
+already have preferred keywords/tags you want used, do you want to give me
+2-3 top-ranking listings so I can analyze their tags into common vs unique
+and we decide together, should I search for them myself using these
+candidate keywords: `<list>`, or should I use the saved tags already in the
+database for `<category>`?"
 
-- **User provides listings:** pull `get_listing_details` on exactly those as
-  the external benchmark set — skip the keyword search in Step 2 entirely.
+- **User gives preferred keywords/tags directly:** treat them as the seed
+  tag set — still run Step 2's title/description research (title anatomy,
+  price band, description openers, gaps) so the copy isn't written blind;
+  only the tag-sourcing half of Step 2 is skipped. State plainly in the
+  report that these tags were user-supplied, not research-derived, then
+  fold them into Step 2b's decision gate alongside anything else surfaced.
+- **User provides listings to analyze:** pull `get_listing_details` on
+  exactly those as the external benchmark set — skip the keyword search in
+  Step 2, but still run Step 2's full tag-frequency analysis (common vs
+  unique) against this user-given set. Present the resulting table and go
+  to Step 2b before anything gets drafted.
 - **Skill searches:** confirm or let the user refine the 2-4 candidate
   keywords, then proceed to Step 2 with the confirmed set. If the niche is
   broad or the user wants wider keyword coverage than this skill's own quick
@@ -189,6 +214,25 @@ coincidence, half the sample sharing it is a signal. Pull full details with
 `get_listing_details` (batch thinking: respect the 5 req/s, 5,000/day
 rate limit — don't fan out across five keyword variants at full depth).
 
+**Relevance screen, before tallying anything.** Drop any result that isn't
+genuinely the same product type as the brief — a search for "dog tag" can
+return collars, art prints, or unrelated novelty items alongside real dog
+tags. State how many were dropped and why. If fewer than 8 genuinely
+relevant results remain after dropping, broaden the phrase or run a second
+candidate before proceeding — a tally polluted by off-category listings
+shifts the "at least half" bar meaningfully at this sample size.
+
+**Weight the read toward listings with real proof of demand.**
+`get_listing_details` also returns each listing's `num_favorers` (a real
+cumulative count) and, for active listings, a daily-tabulated `views` count
+(can read 0 for reasons unrelated to actual traffic — treat as directional,
+not exact). When extracting title/tag patterns below, note which listings
+carry meaningfully higher `num_favorers` than the rest of the sample — a
+"unique" tag or title angle coming from a high-favorer listing is a more
+credible signal than the same angle from a listing with zero favorers. This
+doesn't replace the sample-wide frequency tally, it just tells you which
+data points in that tally to trust more.
+
 Extract, concretely:
 
 - **Title anatomy** — what do the first ~40 characters of ranking titles
@@ -202,23 +246,73 @@ Extract, concretely:
   may be underexploited angles (the database's `unique` classification).
   Both matter: the first group gets the new listing into the right searches,
   the second is where a new listing can actually win. Right after presenting
-  this table (skip if this run used saved database tags instead), ask: "Save
-  these tags to the tags database for future reuse?" — see
-  `../_shared/tags-database-guide.md` for the save workflow.
-- **Price band** — compare **landed price** (price + primary domestic
-  shipping) where shipping data is visible, per the shared standards file.
+  this table (skip if this run used saved database tags instead),
+  **automatically save these tags to the tags database — no need to ask** —
+  see `../_shared/tags-database-guide.md` for the save workflow.
+- **Price and shipping — always report both, and always end with a number
+  recommendation, standing rule.** For every listing in the benchmark set
+  (whether the user supplied it or this skill searched for it), pull its
+  `price` and its shipping cost (primary domestic cost from
+  `shipping_profile`/`get_shop_shipping_profile` when visible; note "free
+  shipping"/"not visible" per listing when it isn't). Compute and state
+  plainly:
+  - **Average price** across the sample.
+  - **Average shipping cost** across the sample (separately from price, not
+    folded silently into one landed number — the seller needs to see both
+    to make a shipping-profile decision, not just a sell-price decision).
+  - **Landed price** (price + shipping) per the shared standards file, for
+    positioning context.
+  - **A concrete price suggestion for this new listing** — a specific number
+    or tight range, reasoned from the average and from where this product's
+    differentiators (or lack of them) justify sitting above, at, or below
+    that average. Never end price research with just a range and no
+    recommendation — the seller should not have to do that math themselves.
   Note that visible prices may be temporary sale prices the API can't
   distinguish — caveat, don't assert.
 - **Description openers** — read the first ~160 characters of the top 3-5.
   What claim do they lead with? That's the snippet game the new listing has
   to play.
+- **Personalization requirements (for any customizable/personalized
+  product)** — read each benchmark listing's actual buyer-facing
+  instructions (the "How to order"/"Personalization" section of the
+  description, not just the tags) and tally what buyers are actually asked
+  to submit — name/text, font choice, color choice, multiple names, a photo
+  upload, a date, initials, number of lines, character limits, etc. Fields
+  appearing in at least half the sample are this niche's standard
+  personalization set; note any outliers as optional add-ons. This tally is
+  not just copy research — it feeds `etsy-create-listing`'s Step 4b
+  (`update_listing_personalization`) and, where a field affects price/SKU
+  rather than being pure buyer text (e.g. a color or size choice), its
+  Step 5 variation structure. Never invent personalization fields from
+  guesswork when live competitor listings show exactly what buyers expect
+  to be asked for.
 - **Gaps** — angles (occasion, recipient, use-case) the ranking set is *not*
   covering. A new listing can't out-age incumbents, but it can own a phrase
   they're all ignoring.
+- **Seasonal check.** If a major gifting occasion or season is roughly 2-10
+  weeks out and plausibly relevant to this product, note it explicitly and
+  propose dedicating one of the 13 tag slots to it in Step 2b. If the
+  product is genuinely evergreen (no relevant near-term occasion), state
+  that plainly instead of silently skipping the question.
 
 Optionally sanity-check demand direction with `get_trending_listings` — if
 the niche is adjacent to something currently trending, that's a phrasing
 opportunity worth one tag; if not, skip it, trending data is broad-brush.
+
+### Step 2b — Decide the tag set together before writing anything
+
+Do not let Phase 2 auto-pick the 13 tags from the frequency table alone.
+Present the **common** (≥half the sample) and **unique** (1-2 listings)
+lists from Step 2 as two clearly separated groups, and ask the user which
+they want prioritized for the 13 slots — leaning harder into common
+table-stakes terms, chasing more unique/underexploited angles, mixing in
+specific tags of their own choosing, or "you decide, go with the default
+allocation." If the user gave preferred keywords/tags directly back in
+Step 1, fold those in here too so there's one agreed list, not two competing
+ones. Wait for this answer before Phase 2 drafts the title, tags, or
+description — the title's keyword segments and the description's angle
+should trace back to whatever priorities got agreed here, not just to the
+raw frequency table.
 
 ### Step 3 — Internal benchmark: the shop's own voice and winners
 *(only if Step 0 said this extends an existing line)*
@@ -232,9 +326,13 @@ opportunity worth one tag; if not, skip it, trending data is broad-brush.
   price positioning, and description formatting habits (bullets vs prose,
   emoji or none, how sizing/files/shipping info is presented).
 - Call `get_shop` and read the announcement/bio for brand voice.
-- **If fewer than 3 listings qualify as winners, skip this benchmark and say
-  so in the report** — the copy then leans on the external benchmark alone
-  and that's a stated confidence downgrade, not something to hide.
+- **If fewer than 3 listings qualify as winners at the 90-day window, widen
+  once to a trailing 180-day window before giving up** — a seasonal or
+  slower-moving shop can have genuine winners the 90-day cut misses. Label
+  which window ended up being used in the report. **Only skip this
+  benchmark entirely, and say so plainly, if still fewer than 3 winners at
+  180 days** — the copy then leans on the external benchmark alone, and
+  that's a stated confidence downgrade, not something to hide.
 
 The point of this step: the new listing should read like *this shop wrote
 it*, not like an SEO tool wrote it. Voice consistency across a shop is a
@@ -245,9 +343,10 @@ optimizer dilute the brand.
 
 One short paragraph, stated to the user in the report: "Here's what's ranking
 for X, here's the vocabulary the niche uses, here's the gap this listing will
-aim at, here's the voice it will be written in." Every generation decision in
-Phase 2 must trace back to a line in this synthesis. If a decision can't be
-traced to research, it's theory — flag it as such.
+aim at, here's the voice it will be written in, here's the tag set we agreed
+on in Step 2b." Every generation decision in Phase 2 must trace back to a
+line in this synthesis. If a decision can't be traced to research, it's
+theory — flag it as such.
 
 ---
 
@@ -298,10 +397,11 @@ tag or the title verbatim. **All lowercase** — this is a shop style rule
 (not an API rejection), but every tag must still be written and checked as
 lowercase before presenting.
 
-Fill the 13 slots by **buyer intent**, not by rephrasing one keyword
-thirteen ways — a near-duplicate is technically valid and strategically
-worthless, since it wastes a slot on a search the listing already matches.
-A default allocation to adapt (not a straitjacket — reallocate based on what
+Fill the 13 slots per the priorities agreed in **Step 2b**, by **buyer
+intent** — not by rephrasing one keyword thirteen ways, since a near-duplicate
+is technically valid and strategically worthless, wasting a slot on a search
+the listing already matches. If Step 2b's answer was "you decide," fall back
+to this default allocation (not a straitjacket — reallocate based on what
 Step 2's frequency table showed matters in this niche):
 
 | Slots | Intent | Sourced from |
@@ -366,12 +466,20 @@ human who already clicked; the title and tags did the search work.
 - [ ] Description 150-400 words, scannable structure
 - [ ] Materials/styles character rules met
 - [ ] Every major copy choice traceable to a Phase 1 finding
+- [ ] **Line-up test.** Place this draft's first ~40 title characters and its
+      description hook next to the equivalent from the top 3 benchmark
+      listings. Answer in one sentence each: what does this listing offer
+      that those three don't, and would the hook survive standing alone in a
+      Google snippet next to them? If the honest answer to the first is
+      "nothing," rewrite the differentiator segment before presenting —
+      don't let a title merely comply with the rules while reading
+      identically to everything it's competing against.
 - [ ] **Copy QA Gate** (`../_shared/etsy-seo-standards.md`) — full checklist
       passed: no em dashes, grade 5-7 reading level, no AI-tell phrasing, no
-      copyrighted/trademarked names, no misleading claims, not copied
-      verbatim from a competitor, no leftover placeholders, tone matches the
-      shop's voice. **This gate is mandatory — do not present the report or
-      call `create_draft_listing` on copy that hasn't passed it.** If fixing
+      misleading claims, not copied verbatim from a competitor,
+      no leftover placeholders, tone matches the shop's voice. **This gate is
+      mandatory — do not present the report or call `create_draft_listing`
+      on copy that hasn't passed it.** If fixing
       a QA item changes length (e.g. splitting a long sentence), re-check the
       field-limit boxes above too.
 - [ ] This checklist enforces the **exact same rules `etsy-listing-qa-check`
@@ -392,7 +500,10 @@ Always output in exactly this format:
 ## Research summary
 **Target keyword(s):** <phrases, and why — from Step 2>
 **What's ranking now:** <title/tag patterns observed in the top 10-15>
-**Market price band (landed):** <range, with sale-price caveat>
+**Average price:** <$X across the sample>
+**Average shipping:** <$X across the sample, or "mostly free shipping" / "not visible on N of the sample">
+**Landed price band:** <range, with sale-price caveat>
+**Suggested price for this listing:** <concrete number or tight range, with the one-line reasoning>
 **The gap this listing aims at:** <underexploited angle>
 **Shop voice basis:** <internal winners used, or "skipped — fewer than 3
 qualifying winners / new product direction; external benchmark only">
@@ -430,13 +541,14 @@ styles: <...>
 ```
 
 ## Want me to create this as a draft listing?
-I can create this directly as an (unpublished, photo-less) draft via
-create_draft_listing. If you want that, I'll first show you the complete
-payload — every field exactly as it will be sent — and wait for your
-explicit confirmation before calling anything. Otherwise, the blocks above
-are ready to paste into Etsy's listing form. After a confirmed create, I'll
-offer to run etsy-listing-qa-check against the new draft as an independent
-rules check.
+I can create this directly as an unpublished draft via create_draft_listing
+— I'll need at least one real image file path from you first (this shop
+never creates a draft with zero images). If you want that, I'll first show
+you the complete payload — every field exactly as it will be sent — and
+wait for your explicit confirmation before calling anything. Otherwise, the
+blocks above are ready to paste into Etsy's listing form. After a confirmed
+create, I'll offer to run etsy-listing-qa-check against the new draft as an
+independent rules check.
 
 ## Honest limits
 <the blind-spots paragraph below, adapted to this run>
@@ -444,12 +556,15 @@ rules check.
 
 ## Blind spots — state these plainly, never paper over them
 
-- The Etsy API exposes **no search-volume, views, favorites, click-through,
-  or conversion data**. Phase 1 reads what's *ranking*, which is a strong
-  proxy for what's *working*, but this copy is a **well-grounded hypothesis,
-  not a ranking guarantee** — new listings also compete on factors no copy
-  can control (listing age, review history, conversion track record, photo
-  quality).
+- The Etsy API exposes **no search-volume, click-through, conversion data, or
+  historical traffic trend**. It does return each benchmark listing's
+  current cumulative `num_favorers` and a daily-tabulated `views` count
+  (active listings only) — Phase 1's Step 2 now uses these as a
+  demand-weighting signal on the sample, but they're a snapshot, not a
+  trend line, and still say nothing about *this* new listing's own future
+  performance. This copy is a **well-grounded hypothesis, not a ranking
+  guarantee** — new listings also compete on factors no copy can control
+  (listing age, review history, conversion track record, photo quality).
 - Photos are likely the single biggest conversion lever. This system **can**
   upload them (`upload_listing_image`/`upload_listing_video`, if the owner
   has files ready locally) but still **can't evaluate** them — judging

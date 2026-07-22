@@ -61,7 +61,28 @@ uncertain at payload-build time, confirm via `etsy-docs` (`get_endpoint`,
 
 ## Workflow
 
-### Step 0 — Check for a reusable product template
+**Batching note:** Steps 0a, 1, 1b, and 1c below are four separate
+questions (core name, physical/digital, variants, personalization) with no
+ordering dependency between them — ask them together in one intake message
+rather than as four separate round trips, and collect at least one image
+path in the same message too (see the batching note at the end of Step 1c
+for the full reasoning). Each still needs its own explicit answer; batching
+the *asking* is what's being optimized here, not the *confirming*.
+
+### Step 0a — Get the product's core name first
+
+**Standing rule: before anything else, always ask for (or confirm) the
+product's plain core name** — a short, concrete phrase for what it actually
+is (e.g. "embroidered pillow case", "engraved dog tag", "SVG bundle of
+sunflowers"). Don't proceed to physical/digital branching, template lookup,
+or research on a bare source URL or a vague description alone — a clear core
+name is what makes the rest of the flow (template matching, keyword
+research, taxonomy lookup) targeted instead of guesswork. If the user already
+stated it plainly in their request, just restate it back in passing to
+confirm rather than asking cold; only pause and ask outright when it's
+genuinely unclear what the product is.
+
+### Step 0b — Check for a reusable product template
 
 Before anything else: if the user's request includes a source URL (a
 supplier/dropship product page, e.g. Merchize) or names a product that sounds
@@ -91,14 +112,84 @@ any ambiguity, resolve it before anything else, because this answer drives the
 - **Both** (sold physically AND as a download) → `type: both` — rare; needs
   the shipping profile AND the file.
 
+### Step 1b — Single product, or does it have variants?
+
+Right after settling physical/digital, ask whether this is a **single
+product** or has **variants** (sizes, colors, styles, etc.) — before any
+research starts, not later in Step 3. This early answer shapes what research
+needs to cover (a variant product needs research on how competitors title/
+tag *and price* across their own variants) and confirms up front whether
+Step 5's `update_listing_inventory` step will run at all.
+
+- **Single product** → no variant structure to plan; Step 5 is skipped
+  later.
+- **Has variants** → ask for the option sets now if the user already knows
+  them (e.g. "Small / Medium / Large", "Red / Blue / Green") and whether
+  price/quantity/SKU differs per option — a rough answer is fine here, it
+  gets finalized against real API property/value IDs in Step 5. Flag Etsy's
+  hard limit up front: **max 2 variation properties per listing**.
+
+### Step 1c — Personalization: always confirm when the data suggests it
+
+**Standing rule, universal — not just the Merchize/AliExpress-specific
+checks in Step 3 below.** Look at whatever's actually in hand right now
+(the product's core name from Step 0a, the user's own description, a
+supplier source page if there is one) for any signal that a buyer
+customizes this item at checkout — a name, initials, text, a photo, a
+size/date, a monogram, "add your own X," etc. Whenever that signal is
+present, **explicitly ask the user to confirm it's a personalized/
+customizable product** — even when it seems obvious from the name (e.g.
+"personalized dog tag," "custom name necklace") — and even when it seems
+obviously *not* personalized. Never silently infer either way and carry
+that guess forward unconfirmed. This confirmation is what:
+- Decides whether Step 4b's `update_listing_personalization` runs at all.
+- Feeds the `when_made: made_to_order` standing rule below for confirmed
+  personalized items.
+- Determines whether Step 3's supplier-capability check (can the artwork
+  actually flow through to production, Merchize/AliExpress or otherwise)
+  needs to happen at all.
+
+If the user confirms it's personalized, ask what the buyer actually needs
+to submit (name/text, photo, size, etc.) right here so Step 4b isn't
+starting from scratch later — a rough answer is fine, it gets finalized
+against research (if run) in Step 4b.
+
+### Standing rule — batch the intake questions, and pull the image ask forward
+
+Steps 0a, 1, 1b, and 1c ask four independent questions — core name,
+physical/digital, variants, personalization — none of which depends on the
+answer to another. Asking them one at a time across four separate messages
+costs the user four round trips for no ordering reason. **Batch them into
+one intake message** ("What's the product, is it physical or digital, does
+it have variants, and is it personalized?") and accept the answers however
+they come back, still confirming each explicitly rather than assuming.
+
+**Also pull the image-path request forward into this same intake message**
+("and have your image files ready — I'll need at least one local path
+before the draft can be created") rather than waiting until Step 3's image
+step, deep after the research/copy work is already done. Asking early means
+a "no images yet" answer pauses the flow *before* time is spent on
+research/copy that would otherwise sit finished and unusable — see Step 3's
+hard block on this same requirement.
+
+### Standing rule — reused templates across accounts
+
+A saved product template (`../_shared/product-templates-guide.md`) may have
+first been written for a *different* account. Before reusing its copy/images
+on a new account, re-check that nothing in it references the account it was
+originally written for either — copy should match whichever account it's
+being published to now, never a prior one.
+
 ### Step 2 — Research first? Then get the copy
 
 Ask whether the user wants **research done first**.
 
 - **Yes:** ask the same benchmark-sourcing question used across this skill
-  set: "Will you give me shop/listing links to research against, or should I
-  do it myself?" Then execute `etsy-new-listing-copywriter`'s **Phase 1
-  (Research)** and **Phase 2 (Generation)** exactly as documented in that
+  set: "Do you already have preferred keywords/tags you want used, do you
+  want to give me 2-3 top-ranking listings so I can analyze their tags into
+  common vs unique and we decide together, or should I search myself?" Then
+  execute `etsy-new-listing-copywriter`'s **Phase 1 (Research)** and
+  **Phase 2 (Generation)** exactly as documented in that
   file — its product brief, benchmark selection, tag frequency analysis,
   internal-benchmark check, pre-flight validation, and mandatory Copy QA Gate
   all apply unchanged. When that skill's copy-paste report exists (title,
@@ -141,6 +232,19 @@ Merchize's sheet format (confirmed from the shop's real files):
   additional unit in the same order — this maps to the Etsy shipping
   profile's `secondary_cost`, distinct from the first-item `primary_cost`).
 
+**Also check the supplier's own product page for what it needs to actually
+personalize the item** — separate from pricing/shipping. Look for the
+supplier's own "customizable"/"design template"/"mockup" instructions (e.g.
+Merchize product pages link a "Download Mockup & Template" file and note
+whether printing is DTF/DTG, and whether it's produced per-order or from a
+design prepared once). This tells you whether a buyer's Etsy
+personalization-box text (a name, initials, a date) actually flows through
+to production automatically, or whether the shop has to manually build each
+order's artwork from the template before sending it to the supplier — **don't
+assume either way.** If the supplier's page doesn't say and it isn't
+obvious, flag this as an open question for the user before promising a
+personalization box the shop can't actually service unattended.
+
 Once the sheet is read, **before building any price or shipping payload, ask
 the user two required questions in one batch — never assume a markup:**
 
@@ -156,7 +260,123 @@ the user two required questions in one batch — never assume a markup:**
    - **No** → use Merchize's shipping cost and extra-item cost exactly as
      given (zero added margin) for `primary_cost`/`secondary_cost`.
 
-Show both answers plainly in the write-confirmation payload (Step 4/Step 5's
+**Standing rule — Everywhere Else / ROW shipping is always $10-15**, regardless
+of what any individual product's markup answer above says. When building the
+catch-all "everywhere else" destination (no `destination_country_iso`/
+`destination_region` set — see Step 3's shipping-profile-destination
+guidance): if the SKU sheet's own ROW/rest-of-world column gives a shipping
+fee, use it as long as it falls in (or reasonably close to) the $10-15 band;
+if the sheet gives no ROW figure at all, pick a value at random within
+$10-15 rather than asking the user or defaulting to a fixed number every
+time. Named-region destinations (US, CA, GB, EU) are unaffected — this only
+governs the final "everywhere else" catch-all bucket.
+
+**AliExpress — sourcing rules (parallel to the Merchize section above, but this supplier has no formal SKU/pricing sheet)**
+
+When the product came from an AliExpress product page, there is no
+spreadsheet to read — and unlike Merchize/other suppliers, **do not attempt
+to scrape images, variations, pricing, or shipping/delivery time off the
+AliExpress page.** The shop owner supplies all of that directly (confirmed
+standing instruction, since automated scraping of AliExpress proved
+unreliable in practice — heavy client-side rendering, geo-localized
+pricing/currency, and this project's browser tooling repeatedly timing out
+trying to screenshot/read the page). This narrows this skill's own job on
+the AliExpress page down to one thing: **read the product description/
+specifications text** (via a plain text fetch of the page, not screenshots)
+to inform Step 2's research/copy — the same way any other research source
+feeds the copywriter, nothing more.
+
+Per-field split of responsibility for AliExpress-sourced listings:
+
+- **Product core name** — the user states it directly (Step 0a still always
+  asks/confirms it explicitly, per the standing rule above).
+- **Variations** — the user provides the option sets directly (e.g. which
+  color/design numbers or names, which sizes) — do not scrape swatches or
+  dropdowns off the page. Still follows the normal Step 1b/Step 5 flow (max
+  2 variation properties) once the user's option sets are in hand.
+- **Media, including the size chart** — the user provides the image URLs or
+  local paths directly, **including the size chart image for clothing/
+  apparel items** — do not pull images from the AliExpress page
+  automatically. Add the size chart to the listing's image set (a normal
+  `upload_listing_image` call, its own confirmation) — treat "size chart
+  provided and uploaded" as a required item on the Step 3b Completeness Gate
+  check for any AliExpress-sourced clothing listing, don't let one reach
+  Step 4 without it.
+- **Pricing** — the user provides the actual base cost directly (never
+  compute it from a geo-localized/converted page price). Base price markup
+  still follows the universal standing rule below (always ask, every time).
+- **Shipping cost — hard-coded flat rule, no markup question needed, and reuse one standing profile.**
+  Every AliExpress-sourced listing uses these exact flat shipping rates
+  regardless of what AliExpress itself charges or what markup would
+  otherwise apply (updated 2026-07-22 per explicit user instruction,
+  superseding an earlier USA/UK 4.99, Canada 5.99, Europe 6.99 table):
+  **USA free, UK free, Europe 4.99 USD, Rest of World (catch-all, including
+  Canada — folded in since the user's latest instruction only named 4
+  tiers) 9.99 USD.** Before creating a new shipping profile, call
+  `get_shop_shipping_profiles` and check for one already titled
+  "AliExpress Shipping" on the target account — **reuse its
+  `shipping_profile_id` rather than creating a duplicate profile every
+  time.** Only create it once per account (confirmed write, same as any
+  shipping profile creation) the first time this skill handles an
+  AliExpress-sourced listing on that account; every AliExpress listing
+  after that just reuses the same `shipping_profile_id`. Build it with
+  `primary_cost` values of 0/0/499/999 (cents) for the US/GB/EU-region/
+  catch-all destinations respectively — skip the Merchize-style
+  base-cost+markup shipping calculation entirely for AliExpress products.
+  Default `secondary_cost` to match `primary_cost` on each destination
+  unless the user says otherwise. **This flat rate table is a standing
+  default, not a one-time answer** — keep using it for every future
+  AliExpress-sourced listing without asking again; only change it if the
+  user explicitly says to change the shipping for a listing (their own
+  stated condition for when this default should be revisited).
+- **Processing time — reuse the shop's existing 3-5 day profile, don't
+  create a new one.** Call `get_processing_profiles` and use whichever
+  existing profile is already set to `processing_min: 3` / `processing_max: 5`
+  for every AliExpress-sourced listing. Only fall back to
+  `create_processing_profile` (its own confirmed write) if no such profile
+  exists yet on this account.
+- **Delivery/shipping time — the user provides it directly.** Do not try to
+  read an estimated delivery date off the AliExpress page (it's
+  geo-localized and unreliable without an order-date reference — confirmed
+  in practice). Ask the user for the expected delivery-day range and use
+  that as the shipping profile destination's `min_delivery_days`/
+  `max_delivery_days`. Show the figures in the shipping-profile confirmation
+  payload and get explicit confirmation before creating it.
+- **Customization — always ask explicitly, never infer.** Confirm directly
+  with the user whether this AliExpress product is a **customizable/
+  personalized item** (buyer submits a name, photo, text, or size at
+  checkout) or a **normal, non-personalized item** — AliExpress listings
+  don't reliably state this the way a Merchize product page does. This
+  answer decides whether Step 4b's `update_listing_personalization` step runs
+  at all, and feeds the `when_made: made_to_order` standing rule below for
+  personalized items.
+
+**Standing rule — always ask for the exact price to set, every single
+listing, no exceptions.** Never silently reuse a previous listing's markup
+formula or assume "same as last time" even if the user gave one earlier in
+the same session — always ask explicitly what price (or markup rule) to use
+for *this* product before computing anything. A markup formula from an
+earlier listing is a hint, not a standing default. **If Step 2's research
+ran, restate its concrete price finding inline in the same question rather
+than asking blind** — e.g. "research shows this niche averaging $X (landed
+$Y with shipping), with a suggested price of $Z because <reason> — what
+price should I set?" The user still decides every time; they just decide
+with the number already in front of them instead of having to ask for it
+back.
+
+**Standing rule — `price` cannot be changed via `update_listing` once the
+draft exists.** Confirmed via `etsy-docs`: `updateListing`'s request body has
+no `price` field at all. Calling `update_listing` with a `price` argument
+does not error — it returns 200 with the price silently unchanged, which
+reads as success unless the returned value is checked. **Any price change
+after `create_draft_listing` must go through `update_listing_inventory`**
+(Step 5's endpoint), even for a listing with no real size/color variants —
+call `get_listing_inventory` first to get the auto-generated single-product
+record, then resend it with the updated `offerings[].price`. Always re-fetch
+after any price-change call and confirm the number actually moved before
+telling the user it's done.
+
+Show both markup answers plainly in the write-confirmation payload (Step 4/Step 5's
 report) so the markup is visible next to the numbers it produced, not hidden
 inside a pre-computed price. Save the sheet's absolute path to
 `supplier_sku_sheet_path` and the exact markup rule (e.g. "Tier 1 base cost +
@@ -170,17 +390,50 @@ reusing them, since markup strategy can change between runs.
 **Universal (both types)** — all verified required fields of
 `createDraftListing`:
 
-- `quantity` (int) — ask plainly. For digital listings a high number like 999
-  is common; suggest it, don't assume it.
+- `quantity` (int) — **standing rule: always 999 for physical listings, no
+  question asked.** For digital listings, 999 is also the shop default;
+  still don't ask unless the user wants something else.
 - `title`, `description`, `price` — from Step 2's approved copy.
-- `who_made` — enum `i_did` | `someone_else` | `collective`.
+- `who_made` — enum `i_did` | `someone_else` | `collective`. **Standing rule
+  — never let this block the flow:** `who_made: "someone_else"` requires the
+  target account to have at least one declared Production Partner on file, or
+  `create_draft_listing` fails opaquely. Check with `get_shop_production_partners`
+  (read-only, no confirmation) before building the Step 4 payload. If it
+  returns a partner, use `who_made: "someone_else"` + `production_partner_ids`.
+  **If it returns `count: 0`, do not stop and ask the user whether to add one
+  — use `who_made: "i_did"` instead and continue the flow.** This is the
+  shop's accepted standing practice (confirmed on `itrat_etsy`, which has zero
+  production partners and where every existing supplier-sourced listing
+  already uses `i_did`) — don't re-raise it as a blocker, just state which
+  `who_made` value was used in the Step 4 confirmation payload so the user
+  sees it.
 - `when_made` — enum: `made_to_order`, `2020_2026`, `2010_2019`, `2007_2009`,
-  `before_2007`, `2000_2006`, `1990s` … `1700s`, `before_1700`.
-- `taxonomy_id` (int) — the category. Resolve it from the product brief; if
-  the right ID isn't obvious, look it up via the `etsy-docs` MCP
-  (`search_etsy_api`/`get_endpoint`) — **never guess a taxonomy number**.
+  `before_2007`, `2000_2006`, `1990s` … `1700s`, `before_1700`. **Standing
+  rule: any custom/personalized product (buyer supplies a name, photo, text,
+  size customization, etc. at purchase) always gets `made_to_order`** — don't
+  ask, it's inherent to the product type.
+- `taxonomy_id` (int) — the category. **Always confirmed with the user,
+  never silently chosen.** Resolve a best-inferred candidate from the
+  product brief (look it up via the `etsy-docs` MCP —
+  `search_etsy_api`/`get_endpoint` — never guess a raw number with no
+  lookup behind it), then **present the category name and id to the user
+  and ask them to confirm it or name a different one** before it goes into
+  the Step 4 payload. Don't treat "the live `create_draft_listing` call
+  will reject a bad id anyway" as a substitute for asking — a wrong-but-valid
+  category (e.g. a mug filed under "Home Decor > Wall Art" instead of
+  "Kitchen & Dining > Drinkware") won't error at all, it'll just misfile
+  the listing silently. If the user gives their own category instead,
+  look that one up and confirm it resolves to a real taxonomy id the same
+  way.
 - `type` — set it **explicitly on the create call** from Step 1's answer
   (`physical` | `download` | `both`). Never leave it to the API default.
+- `shop_section_id` — call `get_shop_sections` and offer a short pick-list
+  (or "no section" as an explicit choice, not a silent default) — sections
+  drive the shop's own storefront navigation, and a listing that never gets
+  asked about one quietly skips a real merchandising field.
+- `return_policy_id` — call `get_shop_return_policies` and offer a pick-list
+  the same way. Applies to physical and digital listings alike; don't skip
+  asking just because the product is a digital download.
 
 **Physical branch:**
 
@@ -199,21 +452,26 @@ reusing them, since markup strategy can change between runs.
   present its existing profiles (processing days) the same way; only offer
   `create_processing_profile` if none fit, as its own separately-confirmed
   write.
-- Optional but worth asking in one batch: `item_weight` / `item_length` /
-  `item_width` / `item_height` with `item_weight_unit` (`oz`,`lb`,`g`,`kg`)
-  and `item_dimensions_unit` (`in`,`ft`,`mm`,`cm`,`m`,`yd`,`inches`);
-  `materials` (array, letters/numbers/whitespace only — see the shared
-  standards file); `processing_min`/`processing_max`; `styles` (array, up to
-  2, each ≤45 chars, letters/numbers/whitespace only). **`styles` can only be
-  set on this `create_draft_listing` call** — `update_listing` has no
-  `style`/`styles` field at all, so if it's skipped now it cannot be added
-  later through this API (only by deleting and recreating the draft, or
-  editing manually in Etsy's own UI). Ask for it here, don't defer it.
-- **Variants:** ask now — before creating anything — whether the product has
-  variations (sizes, colors, etc.), what the exact option sets are (e.g.
-  "Small / Medium / Large" or "Red / Blue / Green"), and whether price,
-  quantity, or SKU differs per option. The answers feed Step 5; asking
-  upfront avoids re-interrogating the user mid-flow.
+- `materials` — **not optional in practice: get at least 1 real material for
+  every physical listing**, even a one-word answer ("cotton", "ceramic").
+  It's a genuine filtered-search field on Etsy, and a listing that skips it
+  is quietly less discoverable. Array, letters/numbers/whitespace only —
+  see the shared standards file.
+- `styles` (array, up to 2, each ≤45 chars, letters/numbers/whitespace
+  only) — **must get an explicit answer or an explicit "skip" before
+  `create_draft_listing`, never silently omitted.** This field is
+  **create-only**: `update_listing` has no `style`/`styles` field at all, so
+  a skipped-now styles field is permanently lost, not deferred — the only
+  way back is deleting and recreating the draft or editing manually in
+  Etsy's own UI. Ask for it here, and make sure the user actually answers
+  (yes or explicit no) rather than the question quietly going unanswered.
+- Also worth asking in the same batch, genuinely optional: `item_weight` /
+  `item_length` / `item_width` / `item_height` with `item_weight_unit`
+  (`oz`,`lb`,`g`,`kg`) and `item_dimensions_unit`
+  (`in`,`ft`,`mm`,`cm`,`m`,`yd`,`inches`); `processing_min`/`processing_max`.
+- **Variants:** already asked in Step 1b — if the option sets or per-option
+  price/quantity/SKU weren't fully pinned down there, finalize them here.
+  The answers feed Step 5.
 
 **Digital branch:**
 
@@ -224,15 +482,40 @@ reusing them, since markup strategy can change between runs.
 
 **Images and video (both types) — a first-class step, not an afterthought:**
 
+- **Standing rule — try the source first:** when the product came from a
+  source URL (Merchize or any supplier page), attempt to pull product images
+  straight from that page/link before asking the user for anything. Only
+  fall back to asking the user for an absolute local path or an image link
+  when the source page has no usable images (none found or broken). Never
+  skip straight to asking the user without trying the source link first
+  when one exists.
 - Ask for the **absolute local path(s)** of the image file(s) to attach, and
   the order they should appear in (rank 1 = first/leftmost, the thumbnail).
-  Ask if they want `alt_text` per image (max 500 chars — good for
-  accessibility and SEO).
+  `alt_text` defaults automatically to the listing's own 13 tags,
+  comma-joined, per the standing rule in `../_shared/etsy-seo-standards.md`
+  — don't ask about it; only depart from the default if the user
+  proactively asks for custom alt text on a specific image.
 - Ask whether they have a listing video (Etsy allows one) and its local path.
-- If the user has no images ready, proceed — but say plainly, now and again
-  in the final summary, that **a draft listing needs at least one image
-  before it can ever be set active/published**. A photo-less draft is not
-  launch-ready.
+- **Hard block, no exceptions: do not call `create_draft_listing` until at
+  least one real image path has been collected.** Per the Listing
+  Completeness Gate in `../_shared/etsy-seo-standards.md`, a photo-less draft
+  is an incomplete listing, not a placeholder to fill in "later." If the user
+  has no image ready yet, pause the entire creation flow here — do not
+  proceed to Step 4 — and resume once at least one image is provided. Never
+  create the draft first on the promise that images will follow.
+
+### Step 3b — Completeness Gate check (mandatory, before any write)
+
+Before showing the Step 4 confirmation payload, walk the full **Listing
+Completeness Gate** checklist in `../_shared/etsy-seo-standards.md` against
+everything collected so far and confirm every required item for this
+listing's type (physical/digital/personalizable) is actually in hand — not
+merely discussed or planned. If anything required is still missing (an
+image, `taxonomy_id`, `shipping_profile_id`/`readiness_state_id` for a
+physical listing, a deliverable file path for a digital one, etc.), **stop
+here and go get it from the user** — do not proceed to Step 4 with a gap and
+a plan to patch it in afterward. State plainly which items were checked and
+confirmed present before moving on.
 
 ### Step 4 — Create the draft (confirmed write #1)
 
@@ -245,6 +528,79 @@ and the actual field values that landed — not just "success". **Then write
 the listings-record file** (`data/listings/<account>/<listing_id>.json`) per
 `../_shared/listings-record-guide.md` — this is mandatory, not an ask, for
 every listing this skill creates.
+
+### Step 4b — Personalization (only if the product takes buyer customization)
+
+**Ground the field set in research, not guesswork.** If Phase 1's research
+ran (`etsy-new-listing-copywriter`'s Step 2), it already tallied what
+competitor listings actually ask buyers to submit for this product type
+(name/text, font, color, initials, photo upload, number of lines, etc.) —
+use that tally as the starting proposal for this listing's
+`personalization_questions`. Cross-check it against Step 3's supplier
+capability check (can the supplier actually take that field through to
+production, or does the shop have to hand-build the artwork from a
+template?) before finalizing. Present the proposed field list to the user
+for confirm/adjust — never invent fields from scratch when live competitor
+data and the supplier's own product page already show what's expected. If
+research was skipped for this listing, ask the user directly what a buyer
+needs to submit for the item to be made correctly.
+
+If the product needs a buyer-facing customization box (a name, initials, text,
+photo, or similar entered at checkout — common for any "custom"/"personalized"
+listing), this is **not** part of `create_draft_listing` — Etsy deprecated the
+old `is_personalizable`/`personalization_is_required`/
+`personalization_char_count_max`/`personalization_instructions` fields on
+`createDraftListing`/`updateListing` (removal date April 9, 2026, confirmed
+via `etsy-docs`). Use the dedicated **`update_listing_personalization`** tool
+instead, as its own separately-confirmed write right after the draft exists.
+
+**The real request body is NOT a flat `is_personalizable`/`personalization_*`
+shape** — `etsy-docs`'s `get_endpoint` misleadingly describes it that way, but
+calling it with those fields fails live with `"Error: Missing input
+parameter: [personalization_questions]"`. Confirmed correct shape (via
+`etsy-docs`'s `get_schema` for `...ListingPersonalization` and the
+`tutorials/personalization/multiple-and-new-question-type-support-examples`
+guide):
+
+- Body is `personalization_questions`: an array of question objects, each
+  `{question_text, instructions, question_type, required,
+  max_allowed_characters, max_allowed_files, options}`.
+  - `question_type` — `text_input` for a name/text box (the common case for
+    "custom"/"personalized" products), `dropdown` (needs `options: [{label}]`),
+    `unlabeled_upload`/`labeled_upload` for photo uploads. **`labeled_upload`
+    requires an `options` array** — one `{label}` per upload slot (e.g.
+    "Front"/"Back", or "Dad"/"Mom"/"Children"), and `max_allowed_files` must
+    equal the number of labels — confirmed live via `"Request failed with
+    status code 400"` when `labeled_upload` was sent with no `options`. For a
+    single generic photo/file field (the common case — "upload your photo"),
+    use **`unlabeled_upload`** instead, which needs no `options` at all.
+  - `required` — ask the user whether the buyer must fill it in to check out.
+    `required: false` works fine (an earlier note in this project's docs
+    claiming otherwise was wrong and has been corrected).
+  - `instructions` — the prompt text shown to the buyer (e.g. "Enter the name
+    or text you want embroidered").
+  - `max_allowed_characters` — a reasonable limit for `text_input` (e.g.
+    30-50 for a name/short phrase); ask if unsure.
+- This call **fully replaces** all personalization on the listing — when
+  adding to or editing existing questions, first call `get_listing_personalization`
+  and include each existing question's `question_id` in the array, or that
+  question is deleted.
+- The endpoint also requires the query param
+  `?supports_multiple_personalization_questions=true` — already baked into
+  the `update_listing_personalization` tool's path in `index.ts`, nothing to
+  add manually; omitting it on a raw call 409s.
+- **A fresh listing's first-ever multi-question submission can 400 opaquely.**
+  Confirmed live: posting 2-3 brand-new questions at once (none carrying a
+  `question_id` yet) failed with `"Request failed with status code 400"` and
+  no error detail, while the identical questions succeeded when added one at
+  a time. The `update_listing_personalization` tool now **handles this
+  automatically** (tries the full batch first, falls back to incremental
+  one-at-a-time submission on failure) — build and show the full intended
+  question list as normal, no need to manually split the call.
+
+Show the constructed `personalization_questions` payload, get explicit
+confirmation, then call it. Skip this step entirely for a non-personalizable
+product.
 
 ### Step 5 — Variations (physical listings with variants only)
 
@@ -306,7 +662,23 @@ confirmed against the live API (`etsy-docs`'s `get_endpoint` for
    (e.g. price differs by size), set the matching top-level array so Etsy
    knows which axis controls it: `price_on_property`, `quantity_on_property`,
    `sku_on_property`, `readiness_state_on_property` — each an array of the
-   controlling `property_id`(s).
+   controlling `property_id`(s). **This is required, not optional, whenever
+   that field actually differs across products** — confirmed live: 4 products
+   with different `sku` values but no `sku_on_property` failed with
+   `"Error: sku must be consistent across all products"`. If ANY field
+   differs per product, its `*_on_property` array must list the controlling
+   property_id, or the call rejects.
+
+**Standard properties accept freeform values, not just their listed
+`possible_values`** — confirmed live: sending a standard property (e.g.
+`property_id: 513` for "Size" on taxonomy 2869, found via the
+`get_taxonomy_properties` tool or by checking a same-taxonomy competitor's
+`get_listing_inventory`) with a real-world value not in its suggested list
+(`values: ["3 inch"]`, empty `value_ids`) succeeded — Etsy auto-assigned a
+new `value_id`. Don't assume a standard property is a closed enum; a
+sensible custom value is usually accepted, though checking
+`get_taxonomy_properties`'s list first is still the safer starting point
+when the exact value already exists there.
 5. This is real complexity — walk through it carefully. Show the user the
    full constructed `products` payload in plain terms ("4 products: 2 types ×
    2 sizes, price varies by both, quantity uniform at 999"), alongside the
@@ -368,6 +740,7 @@ and values that will be sent. This skill makes **several separate write
 calls in sequence** — treat each as its own gate:
 
 - `create_draft_listing` — one confirmation (Step 4).
+- `update_listing_personalization` — its own confirmation, if the product is personalizable (Step 4b).
 - `create_shop_shipping_profile` — its own confirmation, if needed (Step 3).
 - `create_processing_profile` — its own confirmation, if needed (Step 3).
 - `update_listing_inventory` — its own confirmation (Step 5).
@@ -436,12 +809,11 @@ Type: physical / download / both
 ## What was set up
 - Draft created: <fields summary>
 - Variations: <n products across <properties>, or "none">
-- Images: <n> uploaded, in order <...> / "none yet"
+- Images: <n> uploaded, in order <...> (always ≥1 — required by the Completeness Gate before creation)
 - Video: <uploaded / none>
 - Digital file: <filename attached / n-a for physical>
 
 ## Still needs manual action
-- <e.g. "At least one image before it can be set active — required">
 - <e.g. "Publish when ready — say the word and I'll show the update_listing
   state:active payload for confirmation">
 - <e.g. "Photos can't be quality-judged by this system — check them in

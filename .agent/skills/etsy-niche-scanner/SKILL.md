@@ -50,7 +50,7 @@ Produce this every time, in this order.
 ### Niche Snapshot
 - **Result density (search-volume proxy)** — result counts per keyword/variant, with the explicit reminder that this is inferred density, not real Etsy search volume.
 - **Price tiers** — rough tier boundaries (budget / mid / premium) with the price band for each and where most listings sit.
-- **Dominant title & tag patterns** — the recurring words, hooks, and structures in top listings; note how homogeneous vs. varied they are. Right after presenting this, ask: "Save these tags to the tags database for future reuse?" — see `../_shared/tags-database-guide.md` for the schema and save workflow.
+- **Dominant title & tag patterns** — the recurring words, hooks, and structures in top listings; note how homogeneous vs. varied they are. Right after presenting this, automatically save these tags to the tags database — no need to ask — see `../_shared/tags-database-guide.md` for the schema and save workflow.
 
 ### Saturation Verdict
 One clear call: **fragmented**, **shop-dominated**, or **thin** — with the evidence (concentration of shop names, review counts, price banding) that led there. State how hard it is for a new entrant to rank.

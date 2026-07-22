@@ -81,9 +81,24 @@ Filename is the numeric `listing_id` — always known immediately after
   "images": [
     {"listing_image_id": 0, "rank": 1, "alt_text": "..."}
   ],
-  "video": null
+  "video": null,
+  "research": {
+    "avg_price": 0,
+    "landed_price_band": "<e.g. \"$18-24\">",
+    "suggested_price": 0,
+    "researched_at": "<ISO date>"
+  }
 }
 ```
+
+`research` is optional — only present when the listing was created via a
+path that ran `etsy-new-listing-copywriter`'s Phase 1 (directly, or reused
+by `etsy-create-listing`/`etsy-copy-listing`). Omit the whole object (or
+leave it `null`) for listings created without research. This turns the
+one-time price recommendation in the copy report into a durable reference:
+`etsy-listing-qa-check` can warn later if the live price has drifted well
+outside the recorded band with no explanation, instead of the research
+being forgotten the moment the report scrolled away.
 
 `variants: null` for a no-variant listing. `images: []` for a photo-less
 draft (still write the file — an incomplete listing is still worth a record,
@@ -101,7 +116,10 @@ whatever point it stopped:
    `etsy-create-listing`, or the equivalent point in
    `etsy-new-listing-copywriter`'s own draft-creation path): create the file
    at `data/listings/<account>/<listing_id>.json` with `listing_data` filled
-   in, `variants: null`, `images: []`.
+   in, `variants: null`, `images: []`. If Phase 1 research ran for this
+   listing, also fill in `research` from its price findings
+   (`avg_price`/`landed_price_band`/`suggested_price`, `researched_at` =
+   today); otherwise omit the field.
 2. **After `update_listing_inventory` succeeds** (Step 5, if the listing has
    variants): update `variants` with the full combination list.
 3. **After each `upload_listing_image` succeeds** (Step 6): append that
@@ -141,12 +159,45 @@ write to Etsy, it's local bookkeeping), but do mention briefly that the
 record was synced so the user knows it's happening (a short aside is enough,
 not a whole report section). Always bump `last_updated`.
 
+## Manual resync from live Etsy state — a standing, on-demand capability
+
+Beyond the automatic sync-on-write above, the user can explicitly ask to
+resync a record (or every record) against Etsy's actual current state at
+any time — most commonly after editing a listing by hand in Etsy's own UI
+(title/tags/price changed outside this system entirely). Both forms below
+are read-only against Etsy (no confirmation needed, same as any `get_*`
+call) and end in a local file overwrite (also no confirmation needed — this
+store's writes are local bookkeeping, never an Etsy API write):
+
+- **Single listing** — "update/sync `<listing_id>`'s file", "check listing X
+  against Etsy": re-fetch the listing's full current state (`get_listing`
+  with `includes: [Images, Videos, Inventory]`, plus
+  `get_listing_personalization`) and overwrite `listing_data`, `variants`,
+  `images`, `personalization`, and `state` in that listing's record to match
+  exactly. State what actually changed (e.g. "tags and title were edited
+  manually on Etsy since last sync — updated") rather than silently
+  rewriting the file with no summary.
+- **Whole catalog** — "check all my listings for updates", "sync anything
+  that's out of date": enumerate every record already on disk under
+  `data/listings/<account>/` plus every currently active/draft listing from
+  `find_all_active_listings_by_shop` that has no record file yet (create
+  those fresh, per the "if missing, create" rule above) — then re-fetch each
+  listing's live state and diff it against the recorded state field by
+  field. Only rewrite records that actually drifted; report a short summary
+  (which `listing_id`s changed and roughly what changed in each — title,
+  tags, price, state, etc.), not a wall of per-listing detail for listings
+  that hadn't drifted at all. For a shop with many listings, batch the reads
+  (`get_listings_by_ids`/`get_listings_inventory_by_ids` take multiple IDs
+  per call) or fan out a few parallel calls rather than one listing at a
+  time serially — mind the 5 req/s rate limit either way.
+
 ## Blind spots — state plainly
 
 - If the listing is edited directly in Etsy's UI or by another tool/session
-  outside this system, this file goes stale until the next update made
-  *through* this system syncs it. Treat it as a fast local reference for
-  *this system's own history*, not an unconditional live source of truth —
+  outside this system, this file goes stale until either the next update
+  made *through* this system syncs it, or the user explicitly asks for a
+  manual resync (see above). Treat it as a fast local reference for *this
+  system's own history*, not an unconditional live source of truth —
   re-fetch from Etsy (`get_listing`/`get_listing_inventory`) before relying
   on exact current values for anything consequential.
 - Numeric IDs recorded here (`shipping_profile_id`, `readiness_state_id`) are

@@ -34,7 +34,7 @@ The user can name extra listings alongside the target to use as a comparison whi
 - Every suggestion in the critique below should then say, where relevant, what the reference listings do differently — "reference listing #456 uses 'boho wall decor' in an open tag slot, this listing doesn't have it" is a concrete, gradeable suggestion; "add more descriptive tags" is not.
 - If the user does **not** name any reference listings, suggestions are grounded in the shared standards file's rules alone — say so plainly rather than implying a comparison happened.
 - **Don't go looking for reference listings on your own.** Proactively researching competitors or the shop's best-sellers is `etsy-optimize-listing`'s job (it pulls 10-15 competitor listings plus the shop's own sales winners as a full competitive-research pass) — this skill only uses reference listings the user explicitly names, and stays fast and light because of that.
-- If reference listings were named, after presenting the "Reference listings used" report section ask: "Save these reference listings' tags to the tags database for future reuse?" — see `../_shared/tags-database-guide.md` for the schema and save workflow.
+- If reference listings were named, after presenting the "Reference listings used" report section, automatically save these reference listings' tags to the tags database — no need to ask — see `../_shared/tags-database-guide.md` for the schema and save workflow.
 
 ## Step 0 — is it even sellable?
 

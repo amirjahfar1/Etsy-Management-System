@@ -1,0 +1,752 @@
+<title>Etsy Pricing Calculator</title>
+<style>
+  :root {
+    --bg: #faf7f2;
+    --card: #ffffff;
+    --text: #2b2420;
+    --muted: #786f66;
+    --border: #e7ddd0;
+    --accent: #d9662f;
+    --accent-dark: #b84f20;
+    --good: #1e7d4a;
+    --good-bg: #e8f5ee;
+    --input-bg: #fffdfb;
+    --shadow: 0 1px 3px rgba(43,36,32,0.08), 0 1px 2px rgba(43,36,32,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1815;
+      --card: #252119;
+      --text: #f1ece4;
+      --muted: #a89d90;
+      --border: #3a342c;
+      --accent: #e8823f;
+      --accent-dark: #f2a066;
+      --good: #4fd189;
+      --good-bg: #16352578;
+      --input-bg: #1f1c17;
+      --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.24);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1b1815; --card: #252119; --text: #f1ece4; --muted: #a89d90;
+    --border: #3a342c; --accent: #e8823f; --accent-dark: #f2a066;
+    --good: #4fd189; --good-bg: #16352578; --input-bg: #1f1c17;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.24);
+  }
+  :root[data-theme="light"] {
+    --bg: #faf7f2; --card: #ffffff; --text: #2b2420; --muted: #786f66;
+    --border: #e7ddd0; --accent: #d9662f; --accent-dark: #b84f20;
+    --good: #1e7d4a; --good-bg: #e8f5ee; --input-bg: #fffdfb;
+    --shadow: 0 1px 3px rgba(43,36,32,0.08), 0 1px 2px rgba(43,36,32,0.06);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 32px 16px 64px;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 0.95rem; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 720px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+  }
+  .card h2 {
+    font-size: 1.05rem;
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card h2 .h2-note { font-size: 0.78rem; color: var(--muted); font-weight: 400; }
+
+  label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 14px 0 6px;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  .field { position: relative; }
+  .field .prefix, .field .suffix {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 0.95rem;
+    pointer-events: none;
+  }
+  .field .prefix { left: 12px; }
+  .field .suffix { right: 12px; }
+
+  input[type="number"], input[type="text"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+    font-family: inherit;
+  }
+  input[type="number"].has-prefix { padding-left: 26px; }
+  input[type="number"].has-suffix { padding-right: 30px; }
+  input[type="number"]:focus, input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input[type="number"]::-webkit-inner-spin-button { opacity: 0.6; }
+
+  .toggle-row {
+    display: flex;
+    gap: 8px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 3px;
+  }
+  .toggle-row button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    padding: 8px 10px;
+    border-radius: 7px;
+    font-size: 0.88rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .toggle-row button.active {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  details { margin-top: 18px; }
+  summary {
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--accent-dark);
+    font-weight: 600;
+    user-select: none;
+  }
+  details[open] summary { margin-bottom: 10px; }
+  .fee-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+
+  .fee-section {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+  }
+  .fee-section-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .checkbox-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .checkbox-line input { accent-color: var(--accent); width: 15px; height: 15px; }
+
+  .radio-row {
+    display: flex;
+    gap: 14px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .radio-row label { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--text); }
+  .radio-row input { accent-color: var(--accent); width: 14px; height: 14px; }
+
+  .result-card { display: flex; flex-direction: column; gap: 14px; }
+  .headline {
+    background: var(--good-bg);
+    border-radius: 12px;
+    padding: 18px 20px;
+    text-align: center;
+  }
+  .headline .label { font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .headline .value { font-size: 2.1rem; font-weight: 700; color: var(--good); line-height: 1.1; }
+  .headline .value small { font-size: 1rem; font-weight: 500; color: var(--muted); }
+  .headline .range { font-size: 1rem; color: var(--muted); margin-top: 2px; }
+
+  .stat-list { display: flex; flex-direction: column; gap: 0; }
+  .stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.92rem;
+  }
+  .stat:last-child { border-bottom: none; }
+  .stat .k { color: var(--muted); }
+  .stat .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat .v.muted-v { color: var(--muted); font-weight: 500; }
+
+  .warn {
+    background: #fdece3;
+    color: #9a3d12;
+    border-radius: 9px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    margin-top: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    .warn { background: #3a2113; color: #ffb385; }
+  }
+  :root[data-theme="dark"] .warn { background: #3a2113; color: #ffb385; }
+  :root[data-theme="light"] .warn { background: #fdece3; color: #9a3d12; }
+
+  .note { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+
+  .instruction-box {
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: var(--input-bg);
+  }
+  .instruction-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .instruction-head button {
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--accent-dark);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .instruction-head button.copied { color: var(--good); border-color: var(--good); }
+  #instructionOut {
+    width: 100%;
+    min-height: 76px;
+    resize: vertical;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 8px 10px;
+    line-height: 1.4;
+  }
+
+  .variant-card { margin-top: 20px; }
+  .vtable-wrap { overflow-x: auto; }
+  table.vtable { width: 100%; border-collapse: collapse; font-size: 0.88rem; min-width: 760px; }
+  table.vtable th {
+    text-align: left;
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.vtable td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table.vtable td input[type="text"] { min-width: 100px; }
+  table.vtable td input[type="number"] { min-width: 78px; }
+  table.vtable .vout { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.vtable .vout.price { color: var(--good); }
+  table.vtable .vout.warn-cell { color: #b84f20; }
+  .vrow-remove {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .vrow-remove:hover { background: var(--input-bg); color: #b84f20; }
+  .vtable-actions { margin-top: 12px; display: flex; gap: 10px; align-items: center; }
+  .add-row-btn {
+    border: 1px dashed var(--border);
+    background: var(--input-bg);
+    color: var(--accent-dark);
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .add-row-btn:hover { border-color: var(--accent); }
+</style>
+
+<div class="wrap">
+  <h1>Etsy Pricing Calculator</h1>
+  <p class="sub">Enter your landed price (product + shipping — what it actually costs you) and target profit, tell it how much discount you'll keep running on the listing — it works out the listing price to set so that after the discount, your landed cost is still covered plus that profit.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Your numbers</h2>
+
+      <label>Landed price (your real cost)</label>
+      <div class="row-2">
+        <div>
+          <label for="productCost" style="margin-top:0">Product cost</label>
+          <div class="field">
+            <span class="prefix">$</span>
+            <input type="number" id="productCost" class="has-prefix" value="8" min="0" step="0.01" oninput="calc()">
+          </div>
+        </div>
+        <div>
+          <label for="shippingCost" style="margin-top:0">Shipping cost</label>
+          <div class="field">
+            <span class="prefix">$</span>
+            <input type="number" id="shippingCost" class="has-prefix" value="2" min="0" step="0.01" oninput="calc()">
+          </div>
+        </div>
+      </div>
+      <p class="note">Landed price: <strong id="landedOut">$10.00</strong></p>
+
+      <label>Target profit</label>
+      <div class="toggle-row">
+        <button id="mode-fixed" class="active" onclick="setMode('fixed')">Fixed $ amount</button>
+        <button id="mode-pct" onclick="setMode('pct')">% markup</button>
+      </div>
+
+      <div id="fixed-fields">
+        <div class="row-2">
+          <div>
+            <label for="profitMin">Profit — min</label>
+            <div class="field">
+              <span class="prefix">$</span>
+              <input type="number" id="profitMin" class="has-prefix" value="10" min="0" step="0.01" oninput="calc()">
+            </div>
+          </div>
+          <div>
+            <label for="profitMax">Profit — max (optional)</label>
+            <div class="field">
+              <span class="prefix">$</span>
+              <input type="number" id="profitMax" class="has-prefix" value="15" min="0" step="0.01" oninput="calc()">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pct-fields" style="display:none">
+        <label for="markupPct">Markup</label>
+        <div class="field">
+          <input type="number" id="markupPct" class="has-suffix" value="100" min="0" step="1" oninput="calc()">
+          <span class="suffix">%</span>
+        </div>
+        <p class="note">100% markup on a $10 landed price = $20 sale price ($10 profit).</p>
+      </div>
+
+      <label for="discount">Discount you'll keep live on the listing</label>
+      <div class="field">
+        <input type="number" id="discount" class="has-suffix" value="20" min="0" max="95" step="1" oninput="calc()">
+        <span class="suffix">%</span>
+      </div>
+
+      <div class="checkbox-line">
+        <input type="checkbox" id="round99" checked onchange="calc()">
+        <label for="round99" style="margin:0">Round listing price up to nearest .99</label>
+      </div>
+
+      <details id="feeDetails">
+        <summary onclick="setTimeout(calc,0)">Advanced: include Etsy fees</summary>
+        <div class="checkbox-line">
+          <input type="checkbox" id="includeFees" onchange="toggleFees()">
+          <label for="includeFees" style="margin:0">Account for Etsy fees eating into the discounted price</label>
+        </div>
+        <div id="feeInputs" style="display:none">
+          <div class="fee-grid">
+            <div>
+              <label for="txnFee">Transaction fee</label>
+              <div class="field">
+                <input type="number" id="txnFee" class="has-suffix" value="6.5" min="0" step="0.1" oninput="calc()">
+                <span class="suffix">%</span>
+              </div>
+            </div>
+            <div>
+              <label for="paymentPct">Payment processing</label>
+              <div class="field">
+                <input type="number" id="paymentPct" class="has-suffix" value="3" min="0" step="0.1" oninput="calc()">
+                <span class="suffix">%</span>
+              </div>
+            </div>
+            <div>
+              <label for="paymentFixed">Payment processing (flat)</label>
+              <div class="field">
+                <span class="prefix">$</span>
+                <input type="number" id="paymentFixed" class="has-prefix" value="0.25" min="0" step="0.01" oninput="calc()">
+              </div>
+            </div>
+            <div>
+              <label for="listingFee">Listing fee</label>
+              <div class="field">
+                <span class="prefix">$</span>
+                <input type="number" id="listingFee" class="has-prefix" value="0.20" min="0" step="0.01" oninput="calc()">
+              </div>
+            </div>
+          </div>
+
+          <div class="fee-section">
+            <div class="fee-section-title">Offsite Ads fee</div>
+            <div class="checkbox-line">
+              <input type="checkbox" id="offsiteAdsEnabled" onchange="calc()">
+              <label for="offsiteAdsEnabled" style="margin:0">Some of my sales come through Etsy Offsite Ads</label>
+            </div>
+            <div class="radio-row">
+              <label><input type="radio" name="offsiteRate" value="15" checked onchange="calc()"> 15% (shops under $10k/yr — mandatory)</label>
+              <label><input type="radio" name="offsiteRate" value="12" onchange="calc()"> 12% (shops over $10k/yr)</label>
+            </div>
+            <label for="offsiteShare">Estimated share of orders via Offsite Ads</label>
+            <div class="field">
+              <input type="number" id="offsiteShare" class="has-suffix" value="0" min="0" max="100" step="1" oninput="calc()">
+              <span class="suffix">%</span>
+            </div>
+            <p class="note">Fee only applies to orders Etsy attributes to an Offsite Ads click, not every sale — estimate what % of your orders come that way. Leave at 0% to ignore it.</p>
+          </div>
+
+          <div class="fee-section">
+            <div class="fee-section-title">Currency conversion fee</div>
+            <div class="checkbox-line">
+              <input type="checkbox" id="currencyEnabled" onchange="calc()">
+              <label for="currencyEnabled" style="margin:0">My bank/payout currency differs from my listing currency</label>
+            </div>
+            <div class="field">
+              <input type="number" id="currencyPct" class="has-suffix" value="2.5" min="0" step="0.1" oninput="calc()">
+              <span class="suffix">%</span>
+            </div>
+          </div>
+
+          <div class="fee-section">
+            <div class="fee-section-title">Regulatory operating fee</div>
+            <label for="regulatoryPct" style="margin-top:0">Rate for your shop's country (0 if none applies)</label>
+            <div class="field">
+              <input type="number" id="regulatoryPct" class="has-suffix" value="0" min="0" step="0.1" oninput="calc()">
+              <span class="suffix">%</span>
+            </div>
+            <p class="note">Etsy charges this only to shops based in specific countries (e.g. UK, France, Italy, Spain, Turkey) — check Shop Manager → Finances → Fees for your exact current rate, then enter it here.</p>
+          </div>
+
+          <p class="note">Transaction/processing defaults are Etsy's standard US rates — edit if your shop's rates differ.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="card result-card">
+      <h2>Set your listing price to</h2>
+      <div class="headline">
+        <div class="label">Listing price on Etsy</div>
+        <div class="value" id="listPriceOut">$0.00</div>
+        <div class="range" id="listPriceRange"></div>
+      </div>
+
+      <div class="stat-list">
+        <div class="stat"><span class="k">Price buyer pays after discount</span><span class="v" id="salePriceOut">$0.00</span></div>
+        <div class="stat"><span class="k">Your actual profit</span><span class="v" id="profitOut">$0.00</span></div>
+        <div class="stat"><span class="k">Profit margin (of sale price)</span><span class="v" id="marginOut">0%</span></div>
+        <div class="stat"><span class="k">ROI (profit ÷ landed cost)</span><span class="v muted-v" id="roiOut">0%</span></div>
+        <div class="stat"><span class="k">Breakeven listing price ($0 profit)</span><span class="v muted-v" id="breakevenOut">$0.00</span></div>
+        <div class="stat" id="feeStatRow" style="display:none"><span class="k">Etsy fees taken</span><span class="v" id="feeOut">$0.00</span></div>
+      </div>
+
+      <div id="warnBox"></div>
+
+      <div class="instruction-box">
+        <div class="instruction-head">
+          <span>Instructions for Claude</span>
+          <button type="button" id="copyBtn" onclick="copyInstruction()">Copy</button>
+        </div>
+        <textarea id="instructionOut" readonly></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="card variant-card">
+    <h2>Check multiple variants at once <span class="h2-note">— same profit target, discount &amp; fee settings above, different cost per row</span></h2>
+    <div class="vtable-wrap">
+      <table class="vtable">
+        <thead>
+          <tr>
+            <th>Variant</th>
+            <th>Product cost</th>
+            <th>Shipping cost</th>
+            <th>Landed cost</th>
+            <th>Listing price</th>
+            <th>Sale price (after discount)</th>
+            <th>Profit</th>
+            <th>Margin</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="vtableBody"></tbody>
+      </table>
+    </div>
+    <div class="vtable-actions">
+      <button type="button" class="add-row-btn" onclick="addVariantRow()">+ Add variant</button>
+      <span class="note" id="variantNote"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+let mode = 'fixed';
+let variantRows = [
+  { id: 1, name: 'Small', productCost: 8, shippingCost: 2 },
+  { id: 2, name: 'Large', productCost: 11, shippingCost: 2.5 }
+];
+let nextVariantId = 3;
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('mode-fixed').classList.toggle('active', m === 'fixed');
+  document.getElementById('mode-pct').classList.toggle('active', m === 'pct');
+  document.getElementById('fixed-fields').style.display = m === 'fixed' ? 'block' : 'none';
+  document.getElementById('pct-fields').style.display = m === 'pct' ? 'block' : 'none';
+  calc();
+}
+
+function toggleFees() {
+  const on = document.getElementById('includeFees').checked;
+  document.getElementById('feeInputs').style.display = on ? 'block' : 'none';
+  calc();
+}
+
+function num(id) {
+  const v = parseFloat(document.getElementById(id).value);
+  return isNaN(v) ? 0 : v;
+}
+
+function roundUp99(price) {
+  let rounded = Math.floor(price) + 0.99;
+  if (rounded < price - 0.0001) rounded += 1;
+  return Math.round(rounded * 100) / 100;
+}
+
+function fmt(n) {
+  return '$' + n.toFixed(2);
+}
+
+// Gathers the shared settings (discount, fees, rounding) used by both the
+// single-item card and every row of the variant table.
+function getSharedSettings() {
+  const discountFrac = Math.min(num('discount'), 95) / 100;
+  const feesOn = document.getElementById('includeFees').checked;
+  let feeFrac = 0;
+  let fixedFees = 0;
+  if (feesOn) {
+    const txnFrac = num('txnFee') / 100;
+    const paymentFrac = num('paymentPct') / 100;
+    fixedFees = num('paymentFixed') + num('listingFee');
+
+    let offsiteFrac = 0;
+    if (document.getElementById('offsiteAdsEnabled').checked) {
+      const rate = parseFloat(document.querySelector('input[name="offsiteRate"]:checked').value) / 100;
+      const share = num('offsiteShare') / 100;
+      offsiteFrac = rate * share;
+    }
+
+    let currencyFrac = 0;
+    if (document.getElementById('currencyEnabled').checked) {
+      currencyFrac = num('currencyPct') / 100;
+    }
+
+    const regulatoryFrac = num('regulatoryPct') / 100;
+
+    feeFrac = txnFrac + paymentFrac + offsiteFrac + currencyFrac + regulatoryFrac;
+  }
+  const round99 = document.getElementById('round99').checked;
+  return { discountFrac, feesOn, feeFrac, fixedFees, round99 };
+}
+
+function requiredListPrice(desiredProfit, cost, settings) {
+  let salePrice;
+  if (settings.feesOn) {
+    salePrice = (desiredProfit + cost + settings.fixedFees) / (1 - settings.feeFrac);
+  } else {
+    salePrice = cost + desiredProfit;
+  }
+  return salePrice / (1 - settings.discountFrac);
+}
+
+function actualsAtListPrice(listPrice, cost, settings) {
+  const salePrice = listPrice * (1 - settings.discountFrac);
+  let fees = 0;
+  let net = salePrice;
+  if (settings.feesOn) {
+    fees = salePrice * settings.feeFrac + settings.fixedFees;
+    net = salePrice - fees;
+  }
+  const profit = net - cost;
+  const margin = salePrice > 0 ? (profit / salePrice) * 100 : 0;
+  return { salePrice, fees, profit, margin };
+}
+
+function roundPrice(p, round99) {
+  return round99 ? roundUp99(p) : Math.round(p * 100) / 100;
+}
+
+function desiredProfitForCost(cost, settings) {
+  if (mode === 'fixed') {
+    return num('profitMin');
+  }
+  return cost * (num('markupPct') / 100);
+}
+
+function calc() {
+  const cost = num('productCost') + num('shippingCost');
+  document.getElementById('landedOut').textContent = fmt(cost);
+  const settings = getSharedSettings();
+
+  let profitMin, profitMax;
+  if (mode === 'fixed') {
+    profitMin = num('profitMin');
+    profitMax = num('profitMax') > profitMin ? num('profitMax') : null;
+  } else {
+    profitMin = cost * (num('markupPct') / 100);
+    profitMax = null;
+  }
+
+  let listMin = requiredListPrice(profitMin, cost, settings);
+  let listMax = profitMax !== null ? requiredListPrice(profitMax, cost, settings) : null;
+
+  listMin = roundPrice(listMin, settings.round99);
+  if (listMax !== null) listMax = roundPrice(listMax, settings.round99);
+
+  document.getElementById('listPriceOut').textContent = fmt(listMin);
+  document.getElementById('listPriceRange').textContent = listMax !== null ? `up to ${fmt(listMax)} for the higher target` : '';
+
+  const primary = actualsAtListPrice(listMin, cost, settings);
+  document.getElementById('salePriceOut').textContent = fmt(primary.salePrice);
+  document.getElementById('profitOut').textContent = fmt(primary.profit);
+  document.getElementById('marginOut').textContent = primary.margin.toFixed(1) + '%';
+  document.getElementById('roiOut').textContent = cost > 0 ? ((primary.profit / cost) * 100).toFixed(1) + '%' : '—';
+
+  const breakeven = roundPrice(requiredListPrice(0, cost, settings), settings.round99);
+  document.getElementById('breakevenOut').textContent = fmt(breakeven);
+
+  const feeRow = document.getElementById('feeStatRow');
+  if (settings.feesOn) {
+    feeRow.style.display = 'flex';
+    document.getElementById('feeOut').textContent = fmt(primary.fees);
+  } else {
+    feeRow.style.display = 'none';
+  }
+
+  const warnBox = document.getElementById('warnBox');
+  warnBox.innerHTML = '';
+  if (num('discount') >= 100) {
+    warnBox.innerHTML = '<div class="warn">Discount can\'t be 100% or more — a listing price can\'t be calculated.</div>';
+  } else if (settings.discountFrac >= 0.95) {
+    warnBox.innerHTML = '<div class="warn">Discount is very high — the required listing price may look unrealistic to buyers even though the math works.</div>';
+  } else if (cost <= 0) {
+    warnBox.innerHTML = '<div class="warn">Enter a landed price above $0 to get a real number.</div>';
+  } else if (settings.feesOn && settings.feeFrac >= 0.95) {
+    warnBox.innerHTML = '<div class="warn">Combined fee rate is extremely high — double check the fee inputs above.</div>';
+  }
+
+  const discountPct = num('discount');
+  const instruction = `Set this listing's price to ${fmt(listMin)}, with a ${discountPct}% discount running on it. After the discount, the buyer will pay ${fmt(primary.salePrice)}, which covers the ${fmt(cost)} landed cost and leaves ${fmt(primary.profit)} profit (${primary.margin.toFixed(1)}% margin, ${cost > 0 ? ((primary.profit / cost) * 100).toFixed(1) : '0'}% ROI). Breakeven listing price is ${fmt(breakeven)}.`;
+  document.getElementById('instructionOut').value = instruction;
+
+  renderVariantTable(settings);
+}
+
+function copyInstruction() {
+  const el = document.getElementById('instructionOut');
+  const btn = document.getElementById('copyBtn');
+  el.select();
+  navigator.clipboard.writeText(el.value).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+  }).catch(() => {
+    document.execCommand('copy');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  });
+}
+
+function addVariantRow() {
+  variantRows.push({ id: nextVariantId++, name: 'Variant ' + variantRows.length, productCost: num('productCost'), shippingCost: num('shippingCost') });
+  calc();
+}
+
+function removeVariantRow(id) {
+  variantRows = variantRows.filter(r => r.id !== id);
+  calc();
+}
+
+function updateVariantField(id, field, value) {
+  const row = variantRows.find(r => r.id === id);
+  if (!row) return;
+  row[field] = field === 'name' ? value : (isNaN(parseFloat(value)) ? 0 : parseFloat(value));
+  calc();
+}
+
+function renderVariantTable(settings) {
+  const body = document.getElementById('vtableBody');
+  body.innerHTML = '';
+  variantRows.forEach(row => {
+    const cost = row.productCost + row.shippingCost;
+    const profit = desiredProfitForCost(cost, settings);
+    let listPrice = requiredListPrice(profit, cost, settings);
+    listPrice = roundPrice(listPrice, settings.round99);
+    const result = actualsAtListPrice(listPrice, cost, settings);
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${escapeAttr(row.name)}" oninput="updateVariantField(${row.id}, 'name', this.value)"></td>
+      <td><div class="field"><span class="prefix">$</span><input type="number" class="has-prefix" min="0" step="0.01" value="${row.productCost}" oninput="updateVariantField(${row.id}, 'productCost', this.value)"></div></td>
+      <td><div class="field"><span class="prefix">$</span><input type="number" class="has-prefix" min="0" step="0.01" value="${row.shippingCost}" oninput="updateVariantField(${row.id}, 'shippingCost', this.value)"></div></td>
+      <td class="vout">${fmt(cost)}</td>
+      <td class="vout price">${fmt(listPrice)}</td>
+      <td class="vout">${fmt(result.salePrice)}</td>
+      <td class="vout ${result.profit < 0 ? 'warn-cell' : ''}">${fmt(result.profit)}</td>
+      <td class="vout ${result.margin < 0 ? 'warn-cell' : ''}">${result.margin.toFixed(1)}%</td>
+      <td><button type="button" class="vrow-remove" onclick="removeVariantRow(${row.id})" title="Remove variant">✕</button></td>
+    `;
+    body.appendChild(tr);
+  });
+  document.getElementById('variantNote').textContent = variantRows.length === 0 ? 'Add a row to compare variants.' : '';
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+calc();
+</script>

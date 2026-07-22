@@ -494,7 +494,7 @@ const WRITE_ENDPOINTS: EndpointSpec[] = [
   // getListingProperties, updateListing, getListingsByShopReceipt, getListingsByShopReturnPolicy,
   // getListingsByShopSectionId
   { name: "get_listings_by_shop", method: "GET", path: "/application/shops/:shop_id/listings", description: "List a shop's listings, including non-active states (draft/inactive/expired) when authenticated as the owner." },
-  { name: "create_draft_listing", method: "POST", path: "/application/shops/:shop_id/listings", description: "Create a new draft listing. Body needs fields like title, description, price, quantity, who_made, when_made, taxonomy_id." },
+  { name: "create_draft_listing", method: "POST", path: "/application/shops/:shop_id/listings?legacy=true", description: "Create a new draft listing. Body needs fields like title, description, price, quantity, who_made, when_made, taxonomy_id. Passing readiness_state_id (required for physical listings) without the `legacy=true` query param Etsy expects for processing-profile-related fields fails with an opaque 400 with no detail — confirmed live; this path hardcodes that param so it's never missed." },
   { name: "get_listing", method: "GET", path: "/application/listings/:listing_id", description: "Retrieve a single listing by ID." },
   { name: "delete_listing", method: "DELETE", path: "/application/listings/:listing_id", description: "Delete a listing (only allowed for draft/expired/inactive listings you own)." },
   { name: "find_all_listings_active", method: "GET", path: "/application/listings/active", description: "Browse all active listings on Etsy, paginated by creation date." },
@@ -510,6 +510,16 @@ const WRITE_ENDPOINTS: EndpointSpec[] = [
   { name: "get_listings_by_return_policy", method: "GET", path: "/application/shops/:shop_id/policies/return/:return_policy_id/listings", description: "Get all listings using a given return policy." },
   { name: "get_listings_by_section", method: "GET", path: "/application/shops/:shop_id/shop-sections/listings", description: "Get listings in a shop section. Pass shop_section_id as an extra argument." },
 
+  // ShopListing Personalization (3) — operationIds: getListingPersonalization,
+  // updateListingPersonalization, deleteListingPersonalization. Replaces the
+  // is_personalizable/personalization_is_required/personalization_char_count_max/
+  // personalization_instructions fields on createDraftListing/updateListing, which Etsy
+  // deprecated and is removing April 9 2026 — use these instead for any new personalizable
+  // listing (custom name/text products, etc.).
+  { name: "get_listing_personalization", method: "GET", path: "/application/listings/:listing_id/personalization", description: "Get a listing's personalization questions. No OAuth scope required (public), routed through the authenticated client for convenience." },
+  { name: "update_listing_personalization", method: "POST", path: "/application/shops/:shop_id/listings/:listing_id/personalization?supports_multiple_personalization_questions=true", description: "Create or fully replace a listing's personalization settings (the buyer-facing customization box). Body needs `personalization_questions`: array of {question_text, instructions, question_type ('text_input'|'dropdown'|'unlabeled_upload'|'labeled_upload'), required, max_allowed_characters, max_allowed_files, options: [{label}]}. Include each existing question's `question_id` (from get_listing_personalization) when updating, since this call fully replaces all personalization on the listing. `labeled_upload` REQUIRES an `options` array (one {label} per upload slot, with `max_allowed_files` matching the label count) — for a single generic photo/file field use `unlabeled_upload` instead, which needs no `options`. If you're submitting 2+ brand-new questions at once (none have a question_id yet) and Etsy rejects it with an opaque 400, this tool automatically retries by submitting the questions one at a time — no need to do that manually." },
+  { name: "delete_listing_personalization", method: "DELETE", path: "/application/shops/:shop_id/listings/:listing_id/personalization", description: "Remove personalization from a listing (turns off the buyer-facing customization box)." },
+
   // ShopListing Inventory (4) — variations, SKU, per-variation price/quantity/processing profile.
   // operationIds: getListingInventory, updateListingInventory, getListingsInventoryByListingIds, getListingProduct
   { name: "get_listing_inventory", method: "GET", path: "/application/listings/:listing_id/inventory", description: "Get a listing's inventory record: products, variation offerings, per-variation price/quantity/SKU. Listings never edited with Etsy's inventory tools have no inventory record." },
@@ -517,6 +527,7 @@ const WRITE_ENDPOINTS: EndpointSpec[] = [
   { name: "get_listings_inventory_by_ids", method: "GET", path: "/application/listings/batch/inventory", description: "Get inventory records for up to 100 listings at once. Pass listing_ids (comma-separated) as an extra argument." },
   { name: "get_listing_product", method: "GET", path: "/application/listings/:listing_id/inventory/products/:product_id", description: "Get a single product (one variation combination) from a listing's inventory." },
   { name: "get_listing_variation_images", method: "GET", path: "/application/shops/:shop_id/listings/:listing_id/variation-images", description: "Get which images are assigned to which variation values on a listing." },
+  { name: "get_taxonomy_properties", method: "GET", path: "/application/seller-taxonomy/nodes/:taxonomy_id/properties", description: "List the standard product properties (e.g. Size, Color) available for a seller taxonomy ID, with each property's property_id and its possible_values (each an {value_id, name} pair) or 'Custom Property' slots with no fixed values. Use this before building update_listing_inventory's property_values so you reference real property_id/value_id pairs instead of guessing. No OAuth scope required (public)." },
   { name: "update_variation_images", method: "POST", path: "/application/shops/:shop_id/listings/:listing_id/variation-images", description: "Assign images to variation values. Body needs variation_images: array of {property_id, value_id, image_id}. Overwrites all existing variation images on the listing." },
 
   // ShopListing Image/Video — read & delete only here (JSON/no-body); uploads need multipart,
@@ -703,6 +714,34 @@ function coerceJsonLikeStrings(obj: any): any {
   return out;
 }
 
+// Etsy's updateListingPersonalization endpoint has been observed to reject a
+// fresh POST containing 2+ brand-new questions (none carrying a question_id
+// yet) with an opaque 400 and no error detail in the response body, even
+// though every individual question shape is valid on its own — the exact
+// same questions succeed when submitted one at a time (each call including
+// the prior questions' just-returned question_id, since this endpoint fully
+// replaces personalization on every call). Root cause unconfirmed since
+// Etsy never explains the 400; this is a defensive workaround, not a fix for
+// a bug in our own code. Try the full batch first (fast path — this is not
+// guaranteed to fail, and often doesn't), and only fall back to incremental
+// one-at-a-time submission if the batch attempt errors.
+async function updatePersonalizationWithFallback(client: AxiosInstance, method: string, url: string, questions: any[]) {
+  try {
+    const response = await client.request({ method, url, data: { personalization_questions: questions } });
+    return response.data;
+  } catch {
+    let accumulated: any[] = [];
+    let last: any = null;
+    for (const question of questions) {
+      const body = [...accumulated, question];
+      const response = await client.request({ method, url, data: { personalization_questions: body } });
+      last = response.data;
+      accumulated = last.personalization_questions;
+    }
+    return last;
+  }
+}
+
 async function callWriteEndpoint(spec: EndpointSpec, args: any) {
   const accountName = resolveAccountName(args.account);
   const account = getAccount(accountName);
@@ -715,6 +754,15 @@ async function callWriteEndpoint(spec: EndpointSpec, args: any) {
   for (const p of params) delete rest[p];
 
   const isBodyMethod = spec.method === "POST" || spec.method === "PUT" || spec.method === "PATCH";
+
+  if (
+    spec.name === "update_listing_personalization" &&
+    Array.isArray(rest.personalization_questions) &&
+    rest.personalization_questions.length > 1
+  ) {
+    return await updatePersonalizationWithFallback(client, spec.method, url, rest.personalization_questions);
+  }
+
   const response = await client.request({
     method: spec.method,
     url,
@@ -807,6 +855,25 @@ async function getListingDetails(args: any) {
     tags: listing.tags,
     materials: listing.materials,
     shipping_profile_id: listing.shipping_profile_id,
+    taxonomy_id: listing.taxonomy_id,
+    who_made: listing.who_made,
+    when_made: listing.when_made,
+    listing_type: listing.listing_type,
+    processing_min: listing.processing_min,
+    processing_max: listing.processing_max,
+    styles: listing.style,
+    is_supply: listing.is_supply,
+    is_customizable: listing.is_customizable,
+    is_personalizable: listing.is_personalizable,
+    is_taxable: listing.is_taxable,
+    return_policy_id: listing.return_policy_id,
+    shop_section_id: listing.shop_section_id,
+    item_weight: listing.item_weight,
+    item_length: listing.item_length,
+    item_width: listing.item_width,
+    item_height: listing.item_height,
+    item_dimensions_unit: listing.item_dimensions_unit,
+    item_weight_unit: listing.item_weight_unit,
     shop: listing.Shop,
     images: listing.Images?.map((img: any) => ({
       url_570xN: img.url_570xN,

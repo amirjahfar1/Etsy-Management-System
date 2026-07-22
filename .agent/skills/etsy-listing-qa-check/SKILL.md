@@ -39,6 +39,14 @@ Point users to the other two when they want strategy or competitive positioning,
 - No tag exactly duplicates another tag on the listing or the title verbatim.
 - No near-duplicate tags (same word/phrase rephrased instead of covering a new buyer intent).
 - **No uppercase letters** — flag every tag containing one.
+- **Buyer-intent distinctness, not just textual distinctness.** Map the 13 tags
+  against the intent buckets `etsy-new-listing-copywriter` uses when allocating
+  slots (what-it-is / material-format / occasion / recipient / use-case-placement
+  / style-aesthetic / underexploited-gap angle). Flag if any single bucket holds
+  more than 4 of the 13 tags, or if fewer than 4 buckets are covered at all —
+  13 tags that are all textually unique can still cover only two or three real
+  buyer intents, which is a search-reach problem this check exists to catch even
+  though the near-duplicate check above wouldn't flag it.
 
 ### Description
 - Opening ~160 characters read as a standalone hook (ad-headline style), not a scene-setter.
@@ -55,9 +63,74 @@ Point users to the other two when they want strategy or competitive positioning,
 
 These last three overlap with the Copy QA Gate that `etsy-new-listing-copywriter`/`etsy-optimize-listing`/`etsy-seasonal-keywords` already run at drafting time — this skill re-checks them against **live** listings, including ones written before the gate existed or edited manually outside this system, which is exactly the gap this skill covers that the drafting-time gate can't.
 
+### Listing Completeness Gate (from `../_shared/etsy-seo-standards.md`)
+This is the same hard checklist `etsy-create-listing` is required to clear **before** a
+draft is ever created — this skill re-checks it against listings that may have been
+created before the gate existed, built by hand outside this system, or edited in a way
+that dropped a required field. Call `get_listing` (already fetched above), plus
+`get_listing_images`, `get_listing_inventory`, `get_all_listing_files` (digital/both
+only), and `get_listing_personalization` — all read-only, no OAuth write scope needed.
+
+- **`price` > 0** and **`quantity`** set.
+- **`who_made`** and **`when_made`** both set (not null).
+- **`taxonomy_id`** set (not null/0).
+- **`type`** explicitly physical/download/both.
+- **At least 1 image** (`get_listing_images` non-empty) — a listing with zero images
+  fails this check regardless of how good its copy is.
+- **Image count/order — warn, not fail.** Below 5 images, flag it as a conversion-risk
+  warning (target is 8-10 per `../_shared/etsy-seo-standards.md`'s Completeness Gate) —
+  don't fail the listing over this the way a zero-image listing fails, but don't stay
+  silent about it either.
+- **Every image has non-empty `alt_text`.** Per the standing default (image alt text =
+  the listing's own tags, comma-joined), flag any image with empty/null `alt_text` —
+  fixable in place via `upload_listing_image` with that image's `listing_image_id`
+  (no `image_path` needed, confirmed live — no re-upload required).
+- **Physical/both only**: `shipping_profile_id` set; `readiness_state_id` set on the
+  listing and on every `offerings` entry in `get_listing_inventory`. **Clothing/apparel
+  listings additionally need a size-chart image** in the gallery (see the shared
+  Completeness Gate) — flag if the images show no chart-like image and nothing in the
+  local record notes one.
+- **Digital/both only**: `get_all_listing_files` returns at least 1 file — a digital
+  listing with no attached file cannot actually be bought. Also check the description
+  states plainly that no physical item ships (the shared field rules require this line
+  for digital listings — it preempts the most common 1-star review on digital
+  products); flag if it's missing.
+- **Personalizable products only** (title/description implies "custom"/"personalized"/
+  "add your name" etc.): `get_listing_personalization` returns at least 1 question.
+  When it does, also re-validate every question against the hard-won payload rules in
+  `CLAUDE.md` (`question_text` 1-45 chars; `instructions` ≤120 chars and absent
+  entirely on `dropdown` questions; `labeled_upload` has an `options` array with
+  `max_allowed_files` matching the label count and ≥2; `unlabeled_upload`'s
+  `max_allowed_files` is also ≥2, never 1; at most one upload-type question per
+  listing) — this catches a manually-edited or pre-system listing that would 400
+  opaquely on a future `update_listing_personalization` call, before that call is
+  ever attempted.
+- **Price-positioning check, only if a research price band was recorded.** If the
+  listing's `data/listings/<account>/<listing_id>.json` record has a non-null
+  `research` object (see `../_shared/listings-record-guide.md`), compare the live
+  `price` against its `landed_price_band`. Warn (don't fail) if the live price sits
+  well outside that band with nothing in the record explaining why — this is meant to
+  catch silent price drift after creation, not to second-guess a deliberate
+  since-changed price.
+
+This is the one non-copy category this skill checks, because a missing required field
+(no image, no shipping profile, no digital file) makes a listing literally unsellable —
+a bigger problem than any tag/title rule violation, and worth surfacing in the same
+mechanical pass rather than waiting for `etsy-audit-listing` to catch it later.
+
+### Listings-record file (local bookkeeping — the one thing this skill DOES fix, not just flag)
+Per `../_shared/listings-record-guide.md`, **every listing this system has ever drafted, published, or updated must have a current `data/listings/<account>/<listing_id>.json` record** — this is mandatory, not opt-in, and every field present in the live listing must be captured in it, nothing skipped. Check:
+- File exists at `data/listings/<account>/<listing_id>.json`.
+- Every field in the file's `listing_data` matches the live listing (`get_listing`) — title, tags, description, price, quantity, who_made, when_made, taxonomy_id, materials, styles, shipping_profile_id, readiness_state_id, return_policy_id, processing_min/max.
+- `variants` matches live `get_listing_inventory` (or is `null` if the listing has none).
+- `images` matches live `get_listing_images` (id/rank/alt_text per image).
+- `state` matches the listing's live state.
+
+Unlike every other check in this skill, **this one is not read-only** — a missing or stale record is local bookkeeping, not an Etsy write, so fix it directly: create the file if absent, or update whichever fields are stale, using Write/Edit (never an `etsy` MCP tool for this file). No user confirmation needed for this specific fix (same as the guide's own sync-on-every-update rule) — just mention briefly that the record was created/synced.
+
 ## What this skill does NOT check
 
-No sellability (`state`/`quantity`), no pricing, no images, no reviews, no competitor comparison — those are covered by `etsy-audit-listing`/`etsy-audit-listings` and `etsy-optimize-listing`. Keep this skill narrow and mechanical; if the user wants a fuller picture, point them there after this report.
+No subjective quality judgment (is the title compelling, are images well-composed/ordered), no reviews, no competitor comparison, no `state` (active/inactive) sellability beyond the Completeness Gate items above — those are covered by `etsy-audit-listing`/`etsy-audit-listings` and `etsy-optimize-listing`. Keep this skill narrow and mechanical; if the user wants a fuller picture, point them there after this report.
 
 ## Report structure — single listing
 
@@ -77,6 +150,7 @@ No sellability (`state`/`quantity`), no pricing, no images, no reviews, no compe
 ✓/✗ No exact duplicates
 ✓/✗ No near-duplicates
 ✓/✗ All lowercase (list any violators)
+✓/✗ Buyer-intent spread (≥4 intent buckets covered, no bucket >4 tags)
 
 ## Description
 ✓/✗ Strong standalone opening hook (≤~160 chars)
@@ -90,6 +164,25 @@ No sellability (`state`/`quantity`), no pricing, no images, no reviews, no compe
 ✓/✗ No em dashes
 ✓/✗ No AI-tell phrasing
 ✓/✗ No placeholders/template artifacts
+
+## Listing Completeness Gate
+✓/✗ price > 0 and quantity set
+✓/✗ who_made / when_made set
+✓/✗ taxonomy_id set
+✓/✗ At least 1 image
+⚠️/✓ Image count ≥5 (warn only, target 8-10)
+✓/✗ Every image has non-empty alt_text
+✓/✗ shipping_profile_id + readiness_state_id set (physical/both only)
+✓/✗ Size chart image present (clothing/apparel listings only)
+✓/✗ At least 1 digital file attached (digital/both only)
+✓/✗ "No physical item ships" stated in description (digital/both only)
+✓/✗ Personalization question(s) set (personalizable products only)
+✓/✗ Personalization questions pass payload rules (personalizable products only)
+⚠️/✓ Price within recorded research band (only if a research record exists)
+
+## Listings-record file
+✓/✗ data/listings/<account>/<listing_id>.json exists
+✓/✗ Fields in sync with live listing (fixed automatically if not — see note)
 
 ## Violations found — exact fixes
 1. <rule broken> → <exact fix, e.g. "tag 'HANDMADE GIFT' has uppercase — change to 'handmade gift'">
@@ -106,10 +199,10 @@ No sellability (`state`/`quantity`), no pricing, no images, no reviews, no compe
 _<N> active listings scanned_
 
 ## Compliance table
-| Listing (title — id) | Title | Tags | Description | Materials/Styles | Copy quality | Violations |
-|-----------------------|-------|------|--------------|-------------------|--------------|------------|
-| ...                   | ✓/✗   | ✓/✗  | ✓/✗          | ✓/✗               | ✓/✗          | <count>    |
-(sorted by violation count, worst first; fully-clean listings can be summarized as a count rather than listed individually)
+| Listing (title — id) | Title | Tags | Description | Materials/Styles | Copy quality | Completeness Gate | Violations |
+|-----------------------|-------|------|--------------|-------------------|--------------|--------------------|------------|
+| ...                   | ✓/✗   | ✓/✗  | ✓/✗          | ✓/✗               | ✓/✗          | ✓/✗                | <count>    |
+(sorted by violation count, worst first; fully-clean listings can be summarized as a count rather than listed individually. A Completeness Gate failure — missing image, missing shipping profile, missing digital file — is always listed first among violations for that row, since it makes the listing unsellable, not just SEO-weak)
 
 ## Shop-wide violation summary
 - <e.g. "14 of 87 listings have at least one uppercase tag">
