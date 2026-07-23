@@ -8,6 +8,14 @@ Any tool call that **creates, updates, or deletes** data on Etsy (listings, shop
 
 Reason: these actions are live and mostly irreversible against a real, active shop — an accidental delete or edit cannot be undone through the API.
 
+## Standing rule — show the full write payload as a table, not prose (explicit user instruction, 2026-07-23)
+
+Whenever confirming a `create_*`/`update_*` call before executing it (per the safety rule above), present **every field being written** as a single markdown table, not a mix of headers, bullet lists, and blockquotes. This applies to `create_draft_listing`, `update_listing`, `update_listing_inventory`, `update_listing_personalization`, `upload_listing_image`/`upload_listing_video`, and every other confirmed write: title, tags, description, price, category, shipping, processing, return policy, personalization, materials, styles, variants, images — all of it goes in the table, not just the "easy" fields. This replaces the old habit of showing title/tags/description as headed prose blocks and the rest as a separate bullet table; going forward, everything about to be written is one table, shown before the write, every time.
+
+- **Create calls** (nothing to compare against): two columns, `| Field | Value |`.
+- **Update calls**: three columns, `| Field | Old Value | New Value |` — this is what actually satisfies the Safety rule's "old → new values" requirement above; a 2-column table on an update silently drops the old value the safety rule requires showing.
+- **Multi-line fields in a cell** (a full description with paragraph breaks, a long tag list): join line breaks with `<br>` inside that cell so the table itself doesn't break — a raw blank line inside a markdown table cell splits the row. Variant matrices with more than ~10-15 rows may be summarized (e.g. "24 SKUs: 3 colors × 8 sizes, all $48.32, qty 50") rather than listed one row per SKU, to keep the table itself readable — call out any per-SKU value that actually differs instead of listing every identical row.
+
 ## Standing rule — when a live API call errors, fix it AND document it
 
 Whenever a `create_*`/`update_*` call to the Etsy API fails with an error this project didn't already know about (a missing required field, a field-name mismatch, an unexpected format rule, an API limit) — don't just patch it in the moment for that one call and move on:
@@ -29,6 +37,32 @@ Any time a listing is **drafted** (`create_draft_listing`), **published** (`upda
 - **If a record is ever found missing** for a listing this system clearly built or touched (e.g. during an `etsy-listing-qa-check` run) — create it from the listing's current live state immediately, don't just flag it and move on.
 
 This is easy to forget mid-flow when several other writes (shipping profile, personalization, images) are happening in the same conversation — treat it as part of *finishing* each write, not a separate later task.
+
+## Standing rule — verify physical/construction claims against the actual photo before writing copy (explicit user instruction, 2026-07-23)
+
+Before any title/tags/description text claims something about how the product actually looks or is built, **open the featured/thumbnail image (and any other product images in hand) with the Read tool and look at it** — don't take a supplier's spec-sheet text as ground truth for anything visually checkable. This is a standing habit for every listing this system creates or rewrites (`etsy-create-listing`, `etsy-copy-listing`, `etsy-optimize-listing`, `etsy-new-listing-copywriter`), not a one-off step.
+
+Reason: a real listing (Pink Floral Camisole Top, itrat_etsy) was published claiming "zipper detail" straight from an AliExpress spec sheet's boilerplate text — the actual product photos clearly show a tie/bow halter closure, no zipper anywhere. Nobody looked at the image before writing that claim into the title, a tag, and the description; the shop owner caught it after the listing went live and it had to be corrected with a follow-up `update_listing`.
+
+What to actually look for in the image (use judgment per product, but at minimum check the things a spec sheet is most likely to get generically wrong):
+- **Closures/hardware** — zipper, buttons, ties/bows, laces, drawstring, velcro, hooks, or no closure at all. This is exactly what was wrong above.
+- **Construction technique** — printed graphic vs. embroidered vs. sequined/beaded vs. woven-in pattern (these are different manufacturing methods and buyers search them as different terms).
+- **Silhouette and fit** — oversized vs. fitted, cropped vs. regular/full length, sleeve or strap style, neckline/collar type.
+- **Material/texture cues actually visible in the photo** — fleece vs. smooth vs. ribbed vs. sheer/mesh, even if the spec sheet names a specific fabric.
+- **Color accuracy** — does the photo's actual color match the color name about to be used in the title/tags/variant list (don't blindly trust a supplier's color label like "khaki" or "beige" without a visual sanity check).
+- **Any other specific feature the spec sheet claims** (pockets, hood, collar, strap count, pattern placement) — cross-check each claimed construction detail against the photo before it goes into copy, the same way the zipper claim should have been checked.
+
+If a spec sheet's claim can't be confirmed or is contradicted by the photo, don't write it into the copy — describe only what's actually visible, or ask the user if it's unclear from the image alone.
+
+## Standing rule — every draft/publish syncs its tags to the tags database, and every new draft checks the bank first (STRICT, no exceptions)
+
+This is a hard rule, not something to skip when it seems unnecessary — it applies to `etsy-create-listing`, `etsy-new-listing-copywriter`, `etsy-copy-listing`, `etsy-optimize-listing`, `etsy-seasonal-keywords`, and any ad-hoc tag edit, not just the skills that already mention it.
+
+- **On every draft/publish/tag-update**: the instant a `create_draft_listing` or `update_listing`/tag-changing call succeeds with a final `tags` array, save **every one of those tags** into `etsy-mcp-server/data/tags-database.json` — automatically, no confirmation needed (same local-bookkeeping reasoning as the listings-record rule above). Decide the category the same way the shared guide already describes (match by product type, reuse an existing category over creating a near-duplicate one).
+- **No duplicate tags in the bank, ever.** Before adding a tag to a category, check (case-insensitive, exact text match) whether it already exists in that category's `tags` object. If it exists, **increment** its `times_seen`/`sample_size`, append a `sources` entry, and update `last_seen` — never write a second entry for the same tag text in the same category. If it's genuinely new to that category, add it fresh.
+- **On every new product draft — check the bank BEFORE researching or writing tags.** Look up the tags database by the product's name/type for a matching category. If a match exists, **show the user the saved tags** (with `status`/`times_seen`/`last_updated`) before doing anything else — don't silently skip this check and don't silently decide on the user's behalf whether to reuse them; surface what's already known, then proceed per the shared guide's reuse-vs-fresh-research framing.
+
+Full mechanics (schema, category-matching logic, increment vs. new-entry logic, staleness framing) live in `.claude/skills/_shared/tags-database-guide.md` — this section is the strict, non-negotiable version of that guide's save/reuse workflow; the guide explains *how*, this rule says it is *never optional*.
 
 ## Project layout
 
@@ -110,7 +144,7 @@ The `etsy` MCP server exposes ~50 tools. Full parameter-level detail lives in th
 
 **Listing images/videos (OAuth):** `get_listing_images`, `get_listing_videos` — read (public, no OAuth needed but routed through the authenticated client).
 `upload_listing_image` (from a local `image_path`, or re-assign a deleted one via `listing_image_id`), `delete_listing_image`, `upload_listing_video` (from a local `video_path`, or re-associate via `video_id`), `delete_listing_video` — **write, confirm first**. These bypass the generic dispatcher (multipart/form-data, via the `form-data` package) since Etsy requires a binary file part — see `uploadListingImage`/`uploadListingVideo` handlers in `index.ts`.
-  - **`upload_listing_image` can update `alt_text`/`rank` on an already-uploaded, non-deleted image** — pass its existing `listing_image_id` (omit `image_path`) plus the new `alt_text`. Confirmed live: no delete-then-re-upload needed, despite the tool description framing `listing_image_id` as being for re-assigning a *deleted* image. Standing default: every image's `alt_text` gets set to the listing's own tags joined as a comma-separated string (see `.claude/skills/_shared/etsy-seo-standards.md`'s "Image alt text" section) — do this for every listing's images, not just on request.
+  - **`upload_listing_image` can update `alt_text`/`rank` on an already-uploaded, non-deleted image** — pass its existing `listing_image_id` (omit `image_path`) plus the new `alt_text`. Confirmed live: no delete-then-re-upload needed, despite the tool description framing `listing_image_id` as being for re-assigning a *deleted* image. Standing default: each image's `alt_text` gets set to exactly one of the listing's own tags — one tag per image, in tag order, not all 13 tags joined together (updated 2026-07-23; see `.claude/skills/_shared/etsy-seo-standards.md`'s "Image alt text" section for the exact assignment rule) — do this for every listing's images, not just on request.
 
 **Digital listing files — the actual buyer download (OAuth):** `get_all_listing_files`, `get_listing_file` — read (empty result for physical listings).
 `upload_listing_file` (from a local `file_path`, or re-associate via `listing_file_id`), `delete_listing_file` — **write, confirm first**. `upload_listing_file` bypasses the generic dispatcher (multipart, same as image/video). **Built-in safety check**: attaching a file to a listing that isn't already `type: "download"`/`"both"` silently converts it into a digital listing and strips shipping/variations — the tool fetches the listing first and refuses unless it's already digital, or `force: true` is explicitly passed. Symmetric risk on delete: removing a digital listing's *last* remaining file converts it back to physical — the tool description flags this, but there's no automatic guard on delete, so confirm with the user before deleting a listing's only file.
@@ -144,7 +178,7 @@ The `etsy` MCP server exposes ~50 tools. Full parameter-level detail lives in th
 
 ## Agency skills — `.claude/skills/`
 
-22 project skills turn the raw tool map above into repeatable, agency-style playbooks. Each is a `SKILL.md` under `.claude/skills/<name>/` with pushy trigger phrasing in its `description` (so it auto-invokes on natural requests, not just exact skill names) and a fixed output template. All of them inherit the confirm-before-write rule above — any skill whose workflow reaches a `create_*`/`update_*`/`delete_*` call stops at an OLD → NEW diff and waits for explicit confirmation before calling it. Shared field-limit facts (title/tag/description rules, landed-price logic, merchandising checklist) live in `.claude/skills/_shared/etsy-seo-standards.md`, confirmed straight from the live Etsy API schema — referenced by the skills below rather than duplicated.
+23 project skills turn the raw tool map above into repeatable, agency-style playbooks. Each is a `SKILL.md` under `.claude/skills/<name>/` with pushy trigger phrasing in its `description` (so it auto-invokes on natural requests, not just exact skill names) and a fixed output template. All of them inherit the confirm-before-write rule above — any skill whose workflow reaches a `create_*`/`update_*`/`delete_*` call stops at an OLD → NEW diff and waits for explicit confirmation before calling it. Shared field-limit facts (title/tag/description rules, landed-price logic, merchandising checklist) live in `.claude/skills/_shared/etsy-seo-standards.md`, confirmed straight from the live Etsy API schema — referenced by the skills below rather than duplicated.
 
 That shared file also holds the **Copy QA Gate** — a mandatory checklist (no em dashes, grade 5-7 reading level, no AI-tell phrasing, no misleading claims, not copied verbatim from competitor research, tone matches the shop's voice) that `etsy-new-listing-copywriter`, `etsy-optimize-listing`, and `etsy-seasonal-keywords` must run against any drafted title/tags/description **before** showing it to the user and **again immediately before** the `create_draft_listing`/`update_listing` call. No listing copy reaches the user's screen or Etsy's API without clearing it first.
 
@@ -197,12 +231,14 @@ Nothing inside the skills needs editing — they call tools by name, not by a ha
 
 Per API key: **5 requests/second, 5,000/day**. Be careful with loops over many listings/orders — batch where a tool supports it (e.g. `get_listings_by_ids`) instead of one call per item.
 
-## Model usage — Haiku for research/reads, Sonnet for planning/writing (hard rule)
+## Model usage — Haiku for research/reads, Sonnet for planning/writing (STRICT, no exceptions)
 
-Whenever work is delegated to a subagent — the `Agent` tool, or a `Workflow` script's `agent()` calls — split the model choice by task type, not by default:
+**This is a hard, non-negotiable rule, not a default or a suggestion.** Whenever work is delegated to a subagent — the `Agent` tool, or a `Workflow` script's `agent()` calls — the model choice is dictated strictly by task type:
 
-- **Research / reading / data-gathering** — competitor `search_listings` sweeps, reading a large saved tool-result file, summarizing a listing's inventory/variation structure, pulling and aggregating live API data, scanning multiple files for a fact — use the **Haiku** model (`model: "haiku"` on the `Agent` tool; `opts.model: "claude-haiku-4-5-20251001"` inside a `Workflow` script's `agent()` call). This work is mechanical extraction/aggregation, not judgment, and Haiku handles it well at a fraction of the cost and latency.
-- **Planning, synthesis, and writing** — drafting title/tags/description, deciding how to fix something, running the Copy QA Gate, writing this file or a skill file, any step that requires judgment rather than extraction — stays on the main session model (Sonnet, or whatever the user is running). Never delegate this down to Haiku.
+- **Reading = always Haiku.** Any research / reading / data-gathering step — competitor `search_listings` sweeps, reading a large saved tool-result file, summarizing a listing's inventory/variation structure, pulling and aggregating live API data, scanning multiple files for a fact — **must** use the **Haiku** model (`model: "haiku"` on the `Agent` tool; `opts.model: "claude-haiku-4-5-20251001"` inside a `Workflow` script's `agent()` call). No exceptions for "this read is important" or "this file is small" — task type alone decides, not size or perceived importance. This work is mechanical extraction/aggregation, not judgment, and Haiku handles it well at a fraction of the cost and latency.
+- **Writing = always Sonnet.** Any planning, synthesis, or writing step — drafting title/tags/description, deciding how to fix something, running the Copy QA Gate, writing this file or a skill file, any step that requires judgment rather than extraction — **must** stay on the main session model (Sonnet, or whatever the user is running). Never delegate this down to Haiku, ever, for any reason.
+
+Do not blend the two in one subagent call ("read this and also decide X") — split into a Haiku read step and a Sonnet judgment step instead, even if it costs an extra round trip.
 
 This applies retroactively to every skill's workflow, not just newly written ones: `etsy-audit-listing`, `etsy-audit-listings`, `etsy-competitor-research`, `etsy-keyword-research`, `etsy-optimize-listing`, `etsy-new-listing-copywriter`, `etsy-create-listing`, `etsy-copy-listing`, `etsy-niche-scanner`, and any other skill that delegates a research/aggregation step to a subagent should pass `model: "haiku"` on that call. If a skill's workflow text doesn't yet say this explicitly, follow this rule anyway — it overrides an unstated default, not just a documented one.
 

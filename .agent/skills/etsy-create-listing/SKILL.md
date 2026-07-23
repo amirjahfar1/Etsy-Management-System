@@ -286,25 +286,67 @@ specifications text** (via a plain text fetch of the page, not screenshots)
 to inform Step 2's research/copy — the same way any other research source
 feeds the copywriter, nothing more.
 
-Per-field split of responsibility for AliExpress-sourced listings:
+Per-field split of responsibility for AliExpress-sourced listings. The
+`AliExpress Products/_template/product-details.txt` handoff file (see its
+own `RESEARCH`/`IMAGES / VIDEO`/`PRICING` sections) is the standard intake
+format for this — read the whole folder's text files, not just the fixed
+template fields, since the owner may add extra detail outside the template.
 
 - **Product core name** — the user states it directly (Step 0a still always
   asks/confirms it explicitly, per the standing rule above).
+- **Reference listing research (optional, `RESEARCH` field in the template)**
+  — if the owner gives one or more reference listing IDs/URLs (their own or a
+  competitor's), fetch each via `get_listing_details`/`get_listing` before
+  drafting copy and read its title, tags, and description for what's already
+  working — feed this into Step 2's research/copy phase as an additional
+  input alongside the normal keyword research, don't treat it as a
+  replacement for that research.
+- **Tags bank check — mandatory, every AliExpress product, no exceptions.**
+  Per the strict standing rule in the root `CLAUDE.md` ("every new draft
+  checks the bank first"), look up `tags-database.json` by the product's
+  name/type **before** finalizing tags, and if a matching category exists,
+  show the owner the saved tags before proceeding. This runs regardless of
+  whether reference listings were also given — the two research inputs are
+  additive, not either/or.
 - **Variations** — the user provides the option sets directly (e.g. which
   color/design numbers or names, which sizes) — do not scrape swatches or
   dropdowns off the page. Still follows the normal Step 1b/Step 5 flow (max
   2 variation properties) once the user's option sets are in hand.
-- **Media, including the size chart** — the user provides the image URLs or
-  local paths directly, **including the size chart image for clothing/
-  apparel items** — do not pull images from the AliExpress page
-  automatically. Add the size chart to the listing's image set (a normal
-  `upload_listing_image` call, its own confirmation) — treat "size chart
-  provided and uploaded" as a required item on the Step 3b Completeness Gate
-  check for any AliExpress-sourced clothing listing, don't let one reach
-  Step 4 without it.
-- **Pricing** — the user provides the actual base cost directly (never
-  compute it from a geo-localized/converted page price). Base price markup
-  still follows the universal standing rule below (always ask, every time).
+- **Media, including the size chart and the featured image** — the user
+  provides the image URLs or local paths directly, **including the size
+  chart image for clothing/apparel items** — do not pull images from the
+  AliExpress page automatically. Add the size chart to the listing's image
+  set (a normal `upload_listing_image` call, its own confirmation) — treat
+  "size chart provided and uploaded" as a required item on the Step 3b
+  Completeness Gate check for any AliExpress-sourced clothing listing, don't
+  let one reach Step 4 without it. **Identify the featured/thumbnail image
+  by filename, not just numeric rank** — the template asks the owner to
+  confirm the featured file's name contains the word "Featured" (e.g.
+  `1-Featured-hoodie.jpg`); use that file as `rank: 1` / the primary image
+  when both a number prefix and the "Featured" marker are present, and flag
+  it to the owner if the template says "yes" but no filename in `images/`
+  actually contains "Featured" — don't silently guess which file that is.
+- **Pricing — support either a single flat cost or a per-variant cost table,
+  read from whatever the template's `PRICING` section actually contains.**
+  The template asks the owner to state which model applies (`single` or
+  `variant-wise`) before listing numbers — **always** derive the model from
+  that answer plus the actual data given, not from an assumption: a single
+  number under "Per-variant base cost" means every variant/offering uses that
+  one cost; a per-variant list means each offering gets its own cost in the
+  `update_listing_inventory` payload (`price_on_property` must then include
+  the controlling property, per the price-on-property gotcha documented in
+  the root `CLAUDE.md`). The user provides the actual base cost directly
+  either way (never compute it from a geo-localized/converted page price).
+  Base price markup still follows the universal standing rule below (always
+  ask, every time).
+- **Stock quantity — read from the template's `PRICING` section
+  (`Per-variant stock quantity`), same single-vs-variant-wise logic as cost
+  above.** A single number applies to every offering; a per-variant
+  breakdown needs its own `quantity_on_property` entry in
+  `update_listing_inventory`. Don't confuse this with `create_draft_listing`'s
+  create-time `quantity` field, which is always capped at 999 regardless
+  (see the root `CLAUDE.md`'s `quantity` gotcha) — this field is the real
+  per-offering stock set afterward via `update_listing_inventory`.
 - **Shipping cost — hard-coded flat rule, no markup question needed, and reuse one standing profile.**
   Every AliExpress-sourced listing uses these exact flat shipping rates
   regardless of what AliExpress itself charges or what markup would
@@ -491,8 +533,9 @@ reusing them, since markup strategy can change between runs.
   when one exists.
 - Ask for the **absolute local path(s)** of the image file(s) to attach, and
   the order they should appear in (rank 1 = first/leftmost, the thumbnail).
-  `alt_text` defaults automatically to the listing's own 13 tags,
-  comma-joined, per the standing rule in `../_shared/etsy-seo-standards.md`
+  `alt_text` defaults automatically to one of the listing's own tags per
+  image (in tag order, one tag per image — not all 13 joined together),
+  per the standing rule in `../_shared/etsy-seo-standards.md`
   — don't ask about it; only depart from the default if the user
   proactively asks for custom alt text on a specific image.
 - Ask whether they have a listing video (Etsy allows one) and its local path.

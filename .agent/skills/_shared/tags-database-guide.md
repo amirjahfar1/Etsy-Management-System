@@ -83,7 +83,24 @@ permission for it.
    existing tags." No confirmation needed before or after — this always
    happens as part of presenting the research.
 
-## When to offer reuse (create/optimize skills)
+## When to save (every draft/publish/tag-update) — always, no confirmation needed, no exceptions
+
+This is the same mandatory, no-ask save as above, triggered by a different
+event: **the moment any listing's final `tags` array is actually written to
+Etsy** — a fresh `create_draft_listing`, a `state: active` publish, an
+`update_listing` tag change, a seasonal tag rotation, anything — save that
+exact tag set to the database. This applies whether or not the tags came
+from fresh research this turn (they might be a straight reuse of an existing
+category, hand-tweaked, or drafted from scratch) — what matters is these are
+the tags that actually went live, so the bank should reflect them.
+
+Follow the same steps 1-4 above (decide/reuse category, per-tag new-vs-increment
+logic, write + state what happened). The dedup step (3) is the part that must
+never be skipped: **never write two entries for the same tag text in the same
+category** — always check for an existing case-insensitive exact match first
+and increment rather than duplicate.
+
+## When to offer reuse (create/optimize skills) — always check first, no exceptions
 
 Before starting fresh keyword/tag research, check the database for a
 category matching the target product/niche. If a match exists with saved

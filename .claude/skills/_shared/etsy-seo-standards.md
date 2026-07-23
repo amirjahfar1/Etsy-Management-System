@@ -88,17 +88,26 @@ omitted, even though these aren't hard `create_draft_listing` blockers:**
 
 ## Image alt text — standing default, set automatically, no need to ask
 
-Every image uploaded (`upload_listing_image`) gets `alt_text` set to the
-listing's own tags, joined as a plain comma-separated list (e.g. "Blonde
-Hoodie, Viral Hoodie, Trendy Hoodie, ..."), every time — this is a standing
-default per explicit user instruction, not something to ask about per
-listing. Set it at upload time (`alt_text` param) when possible; for images
-already uploaded without it, `upload_listing_image` can update an existing
-image's `alt_text`/`rank` in place by passing its `listing_image_id` (no
-`image_path`) — confirmed live, this does **not** require deleting the
-image first, despite the tool description mentioning `listing_image_id`
-mainly in the context of re-assigning a *deleted* image. Etsy's `alt_text`
-field caps at 500 characters, comfortably enough for all 13 tags joined.
+**Updated 2026-07-23 (explicit user instruction, supersedes the old
+"all 13 tags comma-joined on every image" rule below):** each uploaded
+image gets **exactly one tag** as its `alt_text`, not the full tag list.
+Assign the listing's 13 tags to images **in tag order, one tag per image**
+(image 1 → tag 1, image 2 → tag 2, ...); if there are fewer images than
+tags, only the first N tags get used (one per image) and the rest go
+unused for alt-text purposes — don't reuse a tag on a second image just to
+cover every tag. If there are ever more images than tags (13), wrap back
+to tag 1 rather than leaving later images with no alt_text. State the
+image→tag mapping plainly in the write-confirmation payload so it's
+visible before upload, same as any other field.
+
+This is a standing default per explicit user instruction, not something to
+ask about per listing — apply it automatically on every `upload_listing_image`
+call across every skill. Set it at upload time (`alt_text` param) when
+possible; for images already uploaded without it, `upload_listing_image`
+can update an existing image's `alt_text`/`rank` in place by passing its
+`listing_image_id` (no `image_path`) — confirmed live, this does **not**
+require deleting the image first, despite the tool description mentioning
+`listing_image_id` mainly in the context of re-assigning a *deleted* image.
 
 ## Final-report verification — mandatory before telling the user a draft is done
 
